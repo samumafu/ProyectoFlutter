@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../data/models/ticket_model.dart';
+import 'seat_selection_screen.dart';
+import 'chat_screen.dart';
+import 'driver_tracking_screen.dart';
 
 class TicketDetailScreen extends StatefulWidget {
   final Ticket ticket;
@@ -25,6 +29,20 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
         title: const Text('Detalles del Ticket'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ChatScreen(ticket: widget.ticket),
+                ),
+              );
+            },
+            icon: const Icon(Icons.chat_bubble_outline),
+            tooltip: 'Chat con conductor',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -650,14 +668,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
                     ? _proceedToBooking
                     : null,
                 style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.indigo,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text(
-                  'Reservar Ahora',
-                  style: TextStyle(
+                child: Text(
+                  'Reservar ($_selectedPassengers ${_selectedPassengers == 1 ? 'pasajero' : 'pasajeros'})',
+                  style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
@@ -670,8 +690,26 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
-  void _proceedToBooking() {
-    // Aquí iría la lógica para proceder con la reserva
+  void _proceedToBooking() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SeatSelectionScreen(
+          ticket: widget.ticket,
+          passengerCount: _selectedPassengers,
+        ),
+      ),
+    );
+    
+    if (result != null) {
+      _showBookingConfirmation(result);
+    }
+  }
+
+  void _showBookingConfirmation(Map<String, dynamic> bookingData) {
+    final selectedSeats = bookingData['selectedSeats'] as List<int>;
+    final totalPrice = bookingData['totalPrice'] as double;
+    
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -684,10 +722,11 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             Text('Ruta: ${widget.ticket.origin} → ${widget.ticket.destination}'),
             Text('Fecha: ${DateFormat('dd MMM yyyy').format(widget.ticket.departureTime)}'),
             Text('Hora: ${widget.ticket.departureTimeFormatted}'),
+            Text('Asientos: ${selectedSeats.join(', ')}'),
             Text('Pasajeros: $_selectedPassengers'),
             const SizedBox(height: 8),
             Text(
-              'Total: ${NumberFormat.currency(locale: 'es_CO', symbol: '\$').format((widget.ticket.price * _selectedPassengers) * 1.19)}',
+              'Total: ${NumberFormat.currency(locale: 'es_CO', symbol: '\$').format(totalPrice)}',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -703,13 +742,17 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _showBookingSuccess();
+              _confirmBooking(selectedSeats, totalPrice);
             },
             child: const Text('Confirmar'),
           ),
         ],
       ),
     );
+  }
+
+  void _confirmBooking(List<int> selectedSeats, double totalPrice) {
+    _showBookingSuccess();
   }
 
   void _showBookingSuccess() {
@@ -728,7 +771,7 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           'Tu reserva ha sido confirmada. Recibirás un correo electrónico con los detalles de tu viaje.',
         ),
         actions: [
-          ElevatedButton(
+          TextButton(
             onPressed: () {
               Navigator.pop(context);
               Navigator.pop(context);
@@ -736,7 +779,40 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             },
             child: const Text('Volver al Inicio'),
           ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _openDriverTracking();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Seguir Conductor'),
+          ),
         ],
+      ),
+    );
+  }
+
+  void _openDriverTracking() {
+    // Coordenadas simuladas para origen y destino
+    final originCoords = LatLng(1.2136, -77.2811); // Pasto
+    final destinationCoords = LatLng(2.4448, -76.6147); // Popayán
+    
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => DriverTrackingScreen(
+          tripId: 'TRIP-${DateTime.now().millisecondsSinceEpoch}',
+          driverName: 'Carlos Rodríguez',
+          driverPhone: '+57 300 123 4567',
+          vehiclePlate: 'ABC-123',
+          vehicleModel: 'Mercedes Sprinter',
+          origin: originCoords,
+          destination: destinationCoords,
+          estimatedArrival: '15-20 min',
+        ),
       ),
     );
   }

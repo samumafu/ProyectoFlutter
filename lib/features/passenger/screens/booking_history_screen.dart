@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../data/models/ticket_model.dart';
+import 'rating_screen.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
   const BookingHistoryScreen({super.key});
@@ -184,6 +185,100 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
     );
   }
 
+  Widget _buildCompletedActions(Booking booking) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _showBookingDetails(booking),
+              icon: const Icon(Icons.info_outline),
+              label: const Text('Ver Detalles'),
+            ),
+          ),
+          const SizedBox(width: 12),
+          if (!booking.hasRatedDriver)
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _rateDriver(booking),
+                icon: const Icon(Icons.star_outline),
+                label: const Text('Calificar Conductor'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.green),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.star, color: Colors.green, size: 16),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Calificado (${booking.driverRating}/5)',
+                      style: const TextStyle(
+                        color: Colors.green,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  void _rateDriver(Booking booking) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RatingScreen(
+          booking: booking,
+          isRatingDriver: true,
+          onRatingSubmitted: (rating, comment, tags) {
+            _updateBookingRating(booking, rating, comment, tags, isDriver: true);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _updateBookingRating(Booking booking, int rating, String comment, List<String> tags, {required bool isDriver}) {
+    setState(() {
+      if (isDriver) {
+        booking.driverRating = rating;
+        booking.driverComment = comment;
+        booking.driverTags = tags;
+        booking.hasRatedDriver = true;
+      } else {
+        booking.passengerRating = rating;
+        booking.passengerComment = comment;
+        booking.passengerTags = tags;
+        booking.hasRatedAsPassenger = true;
+      }
+    });
+
+    // Aquí se enviaría la calificación al servidor
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isDriver ? 'Calificación del conductor enviada' : 'Calificación como pasajero enviada'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
   Widget _buildUpcomingBookings() {
     if (_upcomingBookings.isEmpty) {
       return _buildEmptyState(
@@ -272,6 +367,8 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
           _buildRouteInfo(booking.ticket),
           _buildBookingDetails(booking),
           if (isUpcoming) _buildUpcomingActions(booking),
+          if (!isUpcoming && booking.status == BookingStatus.completed) 
+            _buildCompletedActions(booking),
         ],
       ),
     );

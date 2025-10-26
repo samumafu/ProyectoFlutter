@@ -207,6 +207,16 @@ class Booking {
   BookingStatus status;
   final List<String> seatNumbers;
   final Ticket ticket;
+  
+  // Campos de calificación
+  int? driverRating;
+  String? driverComment;
+  List<String>? driverTags;
+  int? passengerRating;
+  String? passengerComment;
+  List<String>? passengerTags;
+  bool hasRatedDriver;
+  bool hasRatedAsPassenger;
 
   Booking({
     required this.id,
@@ -218,6 +228,14 @@ class Booking {
     required this.status,
     required this.seatNumbers,
     required this.ticket,
+    this.driverRating,
+    this.driverComment,
+    this.driverTags,
+    this.passengerRating,
+    this.passengerComment,
+    this.passengerTags,
+    this.hasRatedDriver = false,
+    this.hasRatedAsPassenger = false,
   });
 
   Map<String, dynamic> toJson() {
@@ -231,6 +249,14 @@ class Booking {
       'status': status.toString().split('.').last,
       'seatNumbers': seatNumbers,
       'ticket': ticket.toJson(),
+      'driverRating': driverRating,
+      'driverComment': driverComment,
+      'driverTags': driverTags,
+      'passengerRating': passengerRating,
+      'passengerComment': passengerComment,
+      'passengerTags': passengerTags,
+      'hasRatedDriver': hasRatedDriver,
+      'hasRatedAsPassenger': hasRatedAsPassenger,
     };
   }
 
@@ -247,6 +273,14 @@ class Booking {
       ),
       seatNumbers: List<String>.from(json['seatNumbers']),
       ticket: Ticket.fromJson(json['ticket']),
+      driverRating: json['driverRating'],
+      driverComment: json['driverComment'],
+      driverTags: json['driverTags'] != null ? List<String>.from(json['driverTags']) : null,
+      passengerRating: json['passengerRating'],
+      passengerComment: json['passengerComment'],
+      passengerTags: json['passengerTags'] != null ? List<String>.from(json['passengerTags']) : null,
+      hasRatedDriver: json['hasRatedDriver'] ?? false,
+      hasRatedAsPassenger: json['hasRatedAsPassenger'] ?? false,
     );
   }
 }

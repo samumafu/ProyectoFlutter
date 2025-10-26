@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
+import '../../../data/constants/narino_destinations.dart';
 import '../../../data/models/ticket_model.dart';
-import '../../../data/models/route_model.dart';
-import '../controllers/ticket_search_controller.dart';
 import 'ticket_results_screen.dart';
+import 'map_selection_screen.dart';
+import 'package:latlong2/latlong.dart';
 
 class TicketSearchScreen extends StatefulWidget {
   const TicketSearchScreen({super.key});
@@ -18,20 +18,14 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
   final _originController = TextEditingController();
   final _destinationController = TextEditingController();
   
+  String? _origin;
+  String? _destination;
+  LatLng? _originCoordinates;
+  LatLng? _destinationCoordinates;
   DateTime? _departureDate;
   DateTime? _returnDate;
   int _passengers = 1;
   bool _isRoundTrip = false;
-
-  // Lista de ciudades populares (en una app real vendría de la base de datos)
-  final List<City> _popularCities = [
-    const City(id: '1', name: 'Bogotá', department: 'Cundinamarca', latitude: 4.7110, longitude: -74.0721, isActive: true),
-    const City(id: '2', name: 'Medellín', department: 'Antioquia', latitude: 6.2442, longitude: -75.5812, isActive: true),
-    const City(id: '3', name: 'Cali', department: 'Valle del Cauca', latitude: 3.4516, longitude: -76.5320, isActive: true),
-    const City(id: '4', name: 'Barranquilla', department: 'Atlántico', latitude: 10.9685, longitude: -74.7813, isActive: true),
-    const City(id: '5', name: 'Cartagena', department: 'Bolívar', latitude: 10.3910, longitude: -75.4794, isActive: true),
-    const City(id: '6', name: 'Bucaramanga', department: 'Santander', latitude: 7.1193, longitude: -73.1227, isActive: true),
-  ];
 
   @override
   Widget build(BuildContext context) {
@@ -200,6 +194,11 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon),
+        suffixIcon: IconButton(
+          icon: const Icon(Icons.map),
+          onPressed: () => _openMapSelection(controller, label),
+          tooltip: 'Seleccionar en mapa',
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
         ),
@@ -367,15 +366,16 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
             const SizedBox(height: 16),
             Expanded(
               child: ListView.builder(
-                itemCount: _popularCities.length,
+                itemCount: NarinoDestinations.municipalities.length,
                 itemBuilder: (context, index) {
-                  final city = _popularCities[index];
+                  final destination = NarinoDestinations.municipalities[index];
+                  final region = NarinoDestinations.getRegionForDestination(destination);
                   return ListTile(
                     leading: const Icon(Icons.location_city),
-                    title: Text(city.name),
-                    subtitle: Text(city.department),
+                    title: Text(destination),
+                    subtitle: Text('Región: $region'),
                     onTap: () {
-                      controller.text = city.fullName;
+                      controller.text = destination;
                       Navigator.pop(context);
                     },
                   );
@@ -423,6 +423,28 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
     _destinationController.text = cities[1];
   }
 
+  void _openMapSelection(TextEditingController controller, String label) async {
+    final result = await Navigator.push<Map<String, dynamic>>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapSelectionScreen(
+          title: 'Seleccionar $label',
+        ),
+      ),
+    );
+
+    if (result != null) {
+      controller.text = result['address'] ?? result['name'] ?? 'Ubicación seleccionada';
+      
+      // Actualizar coordenadas según el campo
+      if (label.toLowerCase().contains('origen')) {
+        _originCoordinates = result['coordinates'];
+      } else if (label.toLowerCase().contains('destino')) {
+        _destinationCoordinates = result['coordinates'];
+      }
+    }
+  }
+
   void _searchTickets() {
     if (_originController.text.isEmpty || _destinationController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -443,17 +465,6 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
       );
       return;
     }
-
-    final controller = Provider.of<TicketSearchController>(context, listen: false);
-    
-    controller.searchTickets(
-      origin: _originController.text,
-      destination: _destinationController.text,
-      departureDate: _departureDate!,
-      returnDate: _isRoundTrip ? _returnDate : null,
-      passengers: _passengers,
-      isRoundTrip: _isRoundTrip,
-    );
 
     Navigator.push(
       context,
