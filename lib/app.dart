@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'core/services/supabase_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'features/passenger/screens/passenger_home_screen.dart';
 import 'features/auth/screens/login_screen.dart';
-import 'features/passenger/screens/profile_screen.dart';
-import 'features/company/screens/dashboard_screen.dart';
-import 'features/driver/screens/profile_screen.dart';
 
 class TuFlotaApp extends StatelessWidget {
   const TuFlotaApp({super.key});
@@ -11,59 +9,48 @@ class TuFlotaApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Tu Flota',
-      debugShowCheckedModeBanner: false,
+      title: 'TuFlota',
       theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
-        colorSchemeSeed: Colors.indigo,
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: Colors.white,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.indigo,
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.indigo,
             foregroundColor: Colors.white,
-            textStyle: const TextStyle(fontWeight: FontWeight.bold),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(8),
             ),
           ),
         ),
       ),
       home: const _RootNavigator(),
+      debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class _RootNavigator extends StatefulWidget {
+class _RootNavigator extends StatelessWidget {
   const _RootNavigator();
 
   @override
-  State<_RootNavigator> createState() => _RootNavigatorState();
-}
-
-class _RootNavigatorState extends State<_RootNavigator> {
-  final supabase = SupabaseService();
-
-  @override
   Widget build(BuildContext context) {
-    // Si no hay sesión activa → login
-    if (!supabase.isLoggedIn) {
-      return const LoginScreen();
-    }
-
-    // Si hay sesión activa, obtenemos el rol del usuario
-    final user = supabase.currentUser;
-    final role = user?.userMetadata?['role'] ?? 'pasajero'; // temporal
-
-    // Dependiendo del rol, redirige a la pantalla correspondiente
-    switch (role) {
-      case 'empresa':
-        return const CompanyDashboardScreen();
-      case 'conductor':
-        return const DriverProfileScreen();
-      default:
-        return const PassengerProfileScreen();
-    }
+    return StreamBuilder<AuthState>(
+      stream: Supabase.instance.client.auth.onAuthStateChange,
+      builder: (context, snapshot) {
+        final session = snapshot.hasData ? snapshot.data!.session : null;
+        
+        if (session != null) {
+          return const PassengerHomeScreen();
+        } else {
+          return const LoginScreen();
+        }
+      },
+    );
   }
 }

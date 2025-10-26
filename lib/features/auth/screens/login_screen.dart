@@ -3,7 +3,7 @@ import '../../../core/services/supabase_service.dart';
 import '../controllers/auth_controller.dart';
 import '../../company/screens/dashboard_screen.dart';
 import '../../driver/screens/profile_screen.dart';
-import '../../passenger/screens/profile_screen.dart';
+import '../../passenger/screens/passenger_home_screen.dart';
 import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
@@ -42,7 +42,7 @@ class _LoginScreenState extends State<LoginScreen> {
             nextScreen = const DriverProfileScreen();
             break;
           default:
-            nextScreen = const PassengerProfileScreen();
+            nextScreen = const PassengerHomeScreen();
         }
 
         Navigator.pushReplacement(
