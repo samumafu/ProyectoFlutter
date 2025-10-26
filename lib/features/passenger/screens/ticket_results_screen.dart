@@ -6,7 +6,22 @@ import '../controllers/ticket_search_controller.dart';
 import 'ticket_detail_screen.dart';
 
 class TicketResultsScreen extends StatefulWidget {
-  const TicketResultsScreen({super.key});
+  final String origin;
+  final String destination;
+  final DateTime departureDate;
+  final int passengers;
+  final bool isRoundTrip;
+  final DateTime? returnDate;
+
+  const TicketResultsScreen({
+    super.key,
+    required this.origin,
+    required this.destination,
+    required this.departureDate,
+    required this.passengers,
+    this.isRoundTrip = false,
+    this.returnDate,
+  });
 
   @override
   State<TicketResultsScreen> createState() => _TicketResultsScreenState();

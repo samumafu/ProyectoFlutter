@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../data/constants/narino_destinations.dart';
 import '../../../data/models/ticket_model.dart';
-import 'ticket_results_screen.dart';
+import '../../../screens/passenger/ticket_results_screen.dart';
 import 'map_selection_screen.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -469,7 +469,14 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => const TicketResultsScreen(),
+        builder: (context) => TicketResultsScreen(
+          origin: _originController.text,
+          destination: _destinationController.text,
+          departureDate: _departureDate!,
+          passengers: _passengers,
+          isRoundTrip: _isRoundTrip,
+          returnDate: _returnDate,
+        ),
       ),
     );
   }
