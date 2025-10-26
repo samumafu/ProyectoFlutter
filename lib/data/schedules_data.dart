@@ -9,32 +9,60 @@ import 'drivers_data.dart';
 class SchedulesData {
   static List<Schedule> generateSchedulesForDate(DateTime date) {
     List<Schedule> schedules = [];
-    final routes = RoutesData.getAllRoutesToPasto();
+    final routes = RoutesData.getAllRoutes();
     final vehicles = VehiclesData.getAllVehicles();
     final drivers = DriversData.getAllDrivers();
     
-    // Horarios típicos del día (6:00 AM a 10:00 PM)
-    final timeSlots = [
+    // Horarios expandidos para ciudades principales
+    final mainCityTimeSlots = [
+      TimeOfDay(hour: 5, minute: 0),   // 5:00 AM
       TimeOfDay(hour: 6, minute: 0),   // 6:00 AM
-      TimeOfDay(hour: 7, minute: 30),  // 7:30 AM
+      TimeOfDay(hour: 7, minute: 0),   // 7:00 AM
+      TimeOfDay(hour: 8, minute: 0),   // 8:00 AM
       TimeOfDay(hour: 9, minute: 0),   // 9:00 AM
-      TimeOfDay(hour: 10, minute: 30), // 10:30 AM
+      TimeOfDay(hour: 10, minute: 0),  // 10:00 AM
+      TimeOfDay(hour: 11, minute: 0),  // 11:00 AM
       TimeOfDay(hour: 12, minute: 0),  // 12:00 PM
-      TimeOfDay(hour: 1, minute: 30),  // 1:30 PM
-      TimeOfDay(hour: 3, minute: 0),   // 3:00 PM
-      TimeOfDay(hour: 4, minute: 30),  // 4:30 PM
-      TimeOfDay(hour: 6, minute: 0),   // 6:00 PM
-      TimeOfDay(hour: 7, minute: 30),  // 7:30 PM
-      TimeOfDay(hour: 9, minute: 0),   // 9:00 PM
-      TimeOfDay(hour: 10, minute: 30), // 10:30 PM
+      TimeOfDay(hour: 13, minute: 0),  // 1:00 PM
+      TimeOfDay(hour: 14, minute: 0),  // 2:00 PM
+      TimeOfDay(hour: 15, minute: 0),  // 3:00 PM
+      TimeOfDay(hour: 16, minute: 0),  // 4:00 PM
+      TimeOfDay(hour: 17, minute: 0),  // 5:00 PM
+      TimeOfDay(hour: 18, minute: 0),  // 6:00 PM
+      TimeOfDay(hour: 19, minute: 0),  // 7:00 PM
+      TimeOfDay(hour: 20, minute: 0),  // 8:00 PM
+      TimeOfDay(hour: 21, minute: 0),  // 9:00 PM
+      TimeOfDay(hour: 22, minute: 0),  // 10:00 PM
+    ];
+    
+    // Horarios regulares para otros municipios
+    final regularTimeSlots = [
+      TimeOfDay(hour: 6, minute: 0),   // 6:00 AM
+      TimeOfDay(hour: 8, minute: 0),   // 8:00 AM
+      TimeOfDay(hour: 10, minute: 0),  // 10:00 AM
+      TimeOfDay(hour: 12, minute: 0),  // 12:00 PM
+      TimeOfDay(hour: 14, minute: 0),  // 2:00 PM
+      TimeOfDay(hour: 16, minute: 0),  // 4:00 PM
+      TimeOfDay(hour: 18, minute: 0),  // 6:00 PM
+      TimeOfDay(hour: 20, minute: 0),  // 8:00 PM
     ];
 
     int scheduleId = 1;
     
     for (var route in routes) {
-      // Generar entre 3-6 horarios por ruta por día
-      final numSchedules = 3 + (route.id.hashCode % 4);
-      final selectedTimeSlots = timeSlots.take(numSchedules).toList();
+      // Determinar si es una ruta entre ciudades principales
+      final isMainCityRoute = RoutesData.mainCities.contains(route.origin) && 
+                             RoutesData.mainCities.contains(route.destination);
+      
+      // Seleccionar horarios según el tipo de ruta
+      final availableTimeSlots = isMainCityRoute ? mainCityTimeSlots : regularTimeSlots;
+      
+      // Generar más horarios para rutas principales
+      final numSchedules = isMainCityRoute ? 
+          (8 + (route.id.hashCode % 6)) : // 8-13 horarios para rutas principales
+          (3 + (route.id.hashCode % 4));  // 3-6 horarios para otras rutas
+      
+      final selectedTimeSlots = availableTimeSlots.take(numSchedules).toList();
       
       for (int i = 0; i < selectedTimeSlots.length; i++) {
         final timeSlot = selectedTimeSlots[i];

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../data/models/ticket_model.dart';
+import '../../../data/popular_routes_manager.dart';
 import 'seat_selection_screen.dart';
 import 'chat_screen.dart';
 import 'driver_tracking_screen.dart';
@@ -752,6 +753,9 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   void _confirmBooking(List<int> selectedSeats, double totalPrice) {
+    // Registrar la reserva en el sistema de rutas populares
+    PopularRoutesManager.recordBooking(widget.ticket.origin, widget.ticket.destination);
+    
     _showBookingSuccess();
   }
 

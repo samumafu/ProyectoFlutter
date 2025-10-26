@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../data/constants/narino_destinations.dart';
 import '../../../data/models/ticket_model.dart';
+import '../../../data/popular_routes_manager.dart';
 import '../../../screens/passenger/ticket_results_screen.dart';
 import 'map_selection_screen.dart';
+import 'route_map_screen.dart';
 import 'package:latlong2/latlong.dart';
 
 class TicketSearchScreen extends StatefulWidget {
@@ -173,6 +175,25 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
                   ),
                 ),
               ),
+              const SizedBox(height: 12),
+
+              // Botón para ver ruta en mapa
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _canShowRoute() ? _showRouteOnMap : null,
+                  icon: const Icon(Icons.map),
+                  label: const Text(
+                    'Ver Ruta en Mapa',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.indigo,
+                    side: const BorderSide(color: Colors.indigo),
+                  ),
+                ),
+              ),
               const SizedBox(height: 24),
 
               // Rutas populares
@@ -305,45 +326,55 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            childAspectRatio: 2.5,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: 6,
-          itemBuilder: (context, index) {
-            final routes = [
-              'Bogotá → Medellín',
-              'Medellín → Cali',
-              'Bogotá → Cali',
-              'Cali → Cartagena',
-              'Bogotá → Barranquilla',
-              'Medellín → Cartagena',
-            ];
-            return GestureDetector(
-              onTap: () => _selectPopularRoute(routes[index]),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.indigo.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.indigo.shade200),
-                ),
-                child: Center(
-                  child: Text(
-                    routes[index],
-                    style: TextStyle(
-                      color: Colors.indigo.shade700,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
+        FutureBuilder<List<Map<String, String>>>(
+          future: PopularRoutesManager.getPopularRoutes(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Text('No hay rutas populares disponibles');
+            }
+            
+            final routes = snapshot.data!;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 2.5,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
               ),
+              itemCount: routes.length > 6 ? 6 : routes.length,
+              itemBuilder: (context, index) {
+                final route = routes[index];
+                final routeText = '${route['origin']} → ${route['destination']}';
+                
+                return GestureDetector(
+                  onTap: () => _selectPopularRoute(routeText),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.indigo.shade200),
+                    ),
+                    child: Center(
+                      child: Text(
+                        routeText,
+                        style: TextStyle(
+                          color: Colors.indigo.shade700,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                );
+              },
             );
           },
         ),
@@ -476,6 +507,22 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
           passengers: _passengers,
           isRoundTrip: _isRoundTrip,
           returnDate: _returnDate,
+        ),
+      ),
+    );
+  }
+
+  bool _canShowRoute() {
+    return _originController.text.isNotEmpty && _destinationController.text.isNotEmpty;
+  }
+
+  void _showRouteOnMap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RouteMapScreen(
+          origin: _originController.text,
+          destination: _destinationController.text,
         ),
       ),
     );

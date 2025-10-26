@@ -100,22 +100,16 @@ class NarinoDestinations {
     ]
   };
 
+  // Rutas populares estáticas (ahora se gestionan dinámicamente)
   static const List<Map<String, String>> popularRoutes = [
     {'origin': 'Pasto', 'destination': 'Ipiales'},
     {'origin': 'Pasto', 'destination': 'Túquerres'},
     {'origin': 'Pasto', 'destination': 'Tumaco'},
-    {'origin': 'Ipiales', 'destination': 'Túquerres'},
     {'origin': 'Ipiales', 'destination': 'Pasto'},
     {'origin': 'Túquerres', 'destination': 'Pasto'},
-    {'origin': 'Túquerres', 'destination': 'Ipiales'},
-    {'origin': 'Pasto', 'destination': 'Samaniego'},
-    {'origin': 'Pasto', 'destination': 'La Unión'},
-    {'origin': 'Pasto', 'destination': 'Sandoná'},
     {'origin': 'Tumaco', 'destination': 'Pasto'},
-    {'origin': 'Barbacoas', 'destination': 'Pasto'},
-    {'origin': 'Pasto', 'destination': 'Consacá'},
-    {'origin': 'Pasto', 'destination': 'Yacuanquer'},
     {'origin': 'Pasto', 'destination': 'Tangua'},
+    {'origin': 'Tangua', 'destination': 'Pasto'},
   ];
 
   static List<String> getDestinationsByRegion(String region) {

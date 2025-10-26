@@ -3,40 +3,129 @@ import '../models/route_model.dart';
 import 'constants/narino_destinations.dart';
 
 class RoutesData {
-  // Coordenadas de Pasto (destino principal)
-  static const LatLng pastoCoordinates = LatLng(1.2136, -77.2811);
+  // Coordenadas de municipios principales
+  static const Map<String, LatLng> mainCityCoordinates = {
+    'Pasto': LatLng(1.2136, -77.2811),
+    'Ipiales': LatLng(0.8317, -77.6439),
+    'Tumaco': LatLng(1.8014, -78.7642),
+    'Túquerres': LatLng(1.0864, -77.6175),
+    'Tangua': LatLng(1.0333, -77.7500),
+    'Tenagás': LatLng(1.0167, -77.7167), // Coordenadas aproximadas
+  };
   
-  static List<TransportRoute> getAllRoutesToPasto() {
+  // Municipios principales con múltiples horarios
+  static const List<String> mainCities = [
+    'Pasto', 'Ipiales', 'Túquerres', 'Tumaco', 'Tangua', 'Tenagás'
+  ];
+  
+  static List<TransportRoute> getAllRoutes() {
     final List<TransportRoute> routes = [];
     
-    // Generar rutas desde cada municipio hacia Pasto
-    for (int i = 0; i < NarinoDestinations.municipalities.length; i++) {
-      final municipality = NarinoDestinations.municipalities[i];
-      
-      // No crear ruta desde Pasto hacia Pasto
-      if (municipality.toLowerCase() == 'pasto') continue;
-      
-      final originCoords = _getDestinationCoordinates(municipality);
-      if (originCoords == null) continue;
-      
-      final route = TransportRoute(
-        id: 'route_${municipality.toLowerCase().replaceAll(' ', '_')}_to_pasto',
-        origin: municipality,
-        destination: 'Pasto',
-        originCoordinates: originCoords,
-        destinationCoordinates: pastoCoordinates,
-        distance: _calculateDistance(originCoords, pastoCoordinates),
-        estimatedDuration: _calculateDuration(originCoords, pastoCoordinates),
-        basePrice: _calculatePrice(originCoords, pastoCoordinates),
-        intermediateStops: _getIntermediateStops(municipality),
-      );
-      
-      routes.add(route);
+    // 1. Rutas entre ciudades principales (bidireccionales con múltiples horarios)
+    routes.addAll(_generateMainCityRoutes());
+    
+    // 2. Rutas desde ciudades principales hacia otros municipios
+    routes.addAll(_generateRoutesToOtherMunicipalities());
+    
+    // 3. Rutas desde otros municipios hacia ciudades principales
+    routes.addAll(_generateRoutesFromOtherMunicipalities());
+    
+    return routes;
+  }
+  
+  static List<TransportRoute> _generateMainCityRoutes() {
+    final List<TransportRoute> routes = [];
+    
+    for (int i = 0; i < mainCities.length; i++) {
+      for (int j = 0; j < mainCities.length; j++) {
+        if (i != j) {
+          final origin = mainCities[i];
+          final destination = mainCities[j];
+          final originCoords = mainCityCoordinates[origin]!;
+          final destinationCoords = mainCityCoordinates[destination]!;
+          
+          final route = TransportRoute(
+            id: 'main_${origin.toLowerCase().replaceAll(' ', '_')}_to_${destination.toLowerCase().replaceAll(' ', '_')}',
+            origin: origin,
+            destination: destination,
+            originCoordinates: originCoords,
+            destinationCoordinates: destinationCoords,
+            distance: _calculateDistance(originCoords, destinationCoords),
+            estimatedDuration: _calculateDuration(originCoords, destinationCoords),
+            basePrice: _calculatePrice(originCoords, destinationCoords),
+            intermediateStops: getIntermediateStops(origin, destination),
+          );
+          
+          routes.add(route);
+        }
+      }
     }
     
     return routes;
   }
   
+  static List<TransportRoute> _generateRoutesToOtherMunicipalities() {
+    final List<TransportRoute> routes = [];
+    
+    for (final mainCity in mainCities) {
+      for (final municipality in NarinoDestinations.municipalities) {
+        if (!mainCities.contains(municipality)) {
+          final originCoords = mainCityCoordinates[mainCity];
+          final destinationCoords = getDestinationCoordinates(municipality);
+          
+          if (originCoords != null && destinationCoords != null) {
+            final route = TransportRoute(
+              id: 'route_${mainCity.toLowerCase().replaceAll(' ', '_')}_to_${municipality.toLowerCase().replaceAll(' ', '_')}',
+              origin: mainCity,
+              destination: municipality,
+              originCoordinates: originCoords,
+              destinationCoordinates: destinationCoords,
+              distance: _calculateDistance(originCoords, destinationCoords),
+              estimatedDuration: _calculateDuration(originCoords, destinationCoords),
+              basePrice: _calculatePrice(originCoords, destinationCoords),
+              intermediateStops: getIntermediateStops(mainCity, municipality),
+            );
+            
+            routes.add(route);
+          }
+        }
+      }
+    }
+    
+    return routes;
+  }
+  
+  static List<TransportRoute> _generateRoutesFromOtherMunicipalities() {
+    final List<TransportRoute> routes = [];
+    
+    for (final municipality in NarinoDestinations.municipalities) {
+      if (!mainCities.contains(municipality)) {
+        for (final mainCity in mainCities) {
+          final originCoords = getDestinationCoordinates(municipality);
+          final destinationCoords = mainCityCoordinates[mainCity];
+          
+          if (originCoords != null && destinationCoords != null) {
+            final route = TransportRoute(
+              id: 'route_${municipality.toLowerCase().replaceAll(' ', '_')}_to_${mainCity.toLowerCase().replaceAll(' ', '_')}',
+              origin: municipality,
+              destination: mainCity,
+              originCoordinates: originCoords,
+              destinationCoordinates: destinationCoords,
+              distance: _calculateDistance(originCoords, destinationCoords),
+              estimatedDuration: _calculateDuration(originCoords, destinationCoords),
+              basePrice: _calculatePrice(originCoords, destinationCoords),
+              intermediateStops: getIntermediateStops(municipality, mainCity),
+            );
+            
+            routes.add(route);
+          }
+        }
+      }
+    }
+    
+    return routes;
+  }
+
   static double _calculateDistance(LatLng origin, LatLng destination) {
     const Distance distance = Distance();
     return distance.as(LengthUnit.Kilometer, origin, destination);
@@ -54,102 +143,80 @@ class RoutesData {
     return 15000 + (distanceKm * 2000);
   }
   
-  static List<String> _getIntermediateStops(String origin) {
-    // Paradas intermedias comunes según la ubicación
-    final Map<String, List<String>> intermediateStopsMap = {
-      'Tumaco': ['Barbacoas', 'Ricaurte'],
-      'Ipiales': ['Aldana', 'Pupiales'],
-      'Túquerres': ['Sapuyes', 'Guachucal'],
-      'Samaniego': ['Linares', 'Los Andes'],
-      'La Unión': ['San Bernardo', 'Colón'],
-      'Barbacoas': ['Ricaurte'],
-      'Ricaurte': ['Tumaco'],
-      'Magüí': ['Barbacoas'],
-      'Roberto Payán': ['Barbacoas'],
-      'Mosquera': ['El Rosario'],
-      'El Rosario': ['Leiva'],
-      'Leiva': ['El Rosario'],
-      'Policarpa': ['Leiva'],
-      'Cumbitara': ['Los Andes'],
-      'Los Andes': ['Samaniego'],
-      'Sotomayor': ['Los Andes'],
-      'Linares': ['Samaniego'],
-      'San Pablo': ['La Unión'],
-      'Belén': ['San Pablo'],
-      'San Bernardo': ['La Unión'],
-      'Colón': ['La Unión'],
-      'Santiago': ['Colón'],
-      'La Tola': ['Tumaco'],
-      'Francisco Pizarro': ['Tumaco'],
-      'Olaya Herrera': ['Tumaco'],
-      'Santa Bárbara': ['Tumaco'],
-      'Iscuandé': ['Tumaco'],
-      'El Tambo': ['Tumaco'],
-      'Aldana': ['Ipiales'],
-      'Pupiales': ['Ipiales'],
-      'Gualmatán': ['Ipiales'],
-      'Contadero': ['Ipiales'],
-      'Córdoba': ['Ipiales'],
-      'Potosí': ['Ipiales'],
-      'Cuaspud': ['Ipiales'],
-      'Carlosama': ['Ipiales'],
-      'Guachucal': ['Túquerres'],
-      'Sapuyes': ['Túquerres'],
-      'Iles': ['Túquerres'],
-      'Mallama': ['Túquerres'],
-      'Ricaurte': ['Túquerres'],
-      'Santacruz': ['Túquerres'],
-      'Providencia': ['Túquerres'],
-      'Ancuyá': ['Samaniego'],
-      'Consacá': ['Sandona'],
-      'Sandona': ['Consacá'],
-      'Yacuanquer': ['Sandona'],
-      'Tangua': ['Yacuanquer'],
-      'Funes': ['Tangua'],
-      'Imués': ['Funes'],
-      'Ospina': ['Imués'],
-      'Aldana': ['Ospina'],
-      'Puerres': ['Aldana'],
-      'Córdoba': ['Puerres'],
-      'Potosí': ['Córdoba'],
-      'Cuaspud': ['Potosí'],
-      'Carlosama': ['Cuaspud'],
-      'Buesaco': ['Chachagüí'],
-      'Chachagüí': ['Nariño'],
-      'Nariño': ['La Florida'],
-      'La Florida': ['Sandoná'],
-      'Sandoná': ['Consacá'],
-      'Arboleda': ['Sandoná'],
-      'Albán': ['Arboleda'],
+  static List<String> getIntermediateStops(String origin, String destination) {
+    // Paradas intermedias basadas en rutas geográficas reales
+    final Map<String, Map<String, List<String>>> routeStops = {
+      'Pasto': {
+        'Ipiales': ['Tangua', 'Funes', 'Guachucal'],
+        'Túquerres': ['Tangua', 'Funes'],
+        'Tumaco': ['Chachagüí', 'El Tambo', 'Ricaurte', 'Barbacoas'],
+        'Tangua': [],
+        'Tenagás': ['Tangua'],
+      },
+      'Ipiales': {
+        'Pasto': ['Guachucal', 'Funes', 'Tangua'],
+        'Túquerres': ['Guachucal'],
+        'Tumaco': ['Pasto', 'Chachagüí', 'El Tambo', 'Ricaurte', 'Barbacoas'],
+        'Tangua': ['Guachucal', 'Funes'],
+        'Tenagás': ['Guachucal', 'Funes', 'Tangua'],
+      },
+      'Túquerres': {
+        'Pasto': ['Funes', 'Tangua'],
+        'Ipiales': ['Guachucal'],
+        'Tumaco': ['Pasto', 'Chachagüí', 'El Tambo', 'Ricaurte', 'Barbacoas'],
+        'Tangua': ['Funes'],
+        'Tenagás': ['Funes', 'Tangua'],
+      },
+      'Tumaco': {
+        'Pasto': ['Barbacoas', 'Ricaurte', 'El Tambo', 'Chachagüí'],
+        'Ipiales': ['Barbacoas', 'Ricaurte', 'El Tambo', 'Chachagüí', 'Pasto'],
+        'Túquerres': ['Barbacoas', 'Ricaurte', 'El Tambo', 'Chachagüí', 'Pasto'],
+        'Tangua': ['Barbacoas', 'Ricaurte', 'El Tambo', 'Chachagüí', 'Pasto'],
+        'Tenagás': ['Barbacoas', 'Ricaurte', 'El Tambo', 'Chachagüí', 'Pasto'],
+      },
+      'Tangua': {
+        'Pasto': [],
+        'Ipiales': ['Funes', 'Guachucal'],
+        'Túquerres': ['Funes'],
+        'Tumaco': ['Pasto', 'Chachagüí', 'El Tambo', 'Ricaurte', 'Barbacoas'],
+        'Tenagás': [],
+      },
+      'Tenagás': {
+        'Pasto': ['Tangua'],
+        'Ipiales': ['Tangua', 'Funes', 'Guachucal'],
+        'Túquerres': ['Tangua', 'Funes'],
+        'Tumaco': ['Tangua', 'Pasto', 'Chachagüí', 'El Tambo', 'Ricaurte', 'Barbacoas'],
+        'Tangua': [],
+      },
     };
     
-    return intermediateStopsMap[origin] ?? [];
+    return routeStops[origin]?[destination] ?? [];
   }
   
   static TransportRoute? getRouteById(String routeId) {
     try {
-      return getAllRoutesToPasto().firstWhere((route) => route.id == routeId);
+      return getAllRoutes().firstWhere((route) => route.id == routeId);
     } catch (e) {
       return null;
     }
   }
   
   static List<TransportRoute> getRoutesByOrigin(String origin) {
-    return getAllRoutesToPasto()
+    return getAllRoutes()
         .where((route) => route.origin.toLowerCase() == origin.toLowerCase())
         .toList();
   }
   
   static List<TransportRoute> searchRoutes(String origin, String destination) {
-    return getAllRoutesToPasto()
+    return getAllRoutes()
         .where((route) => 
             route.origin.toLowerCase().contains(origin.toLowerCase()) &&
             route.destination.toLowerCase().contains(destination.toLowerCase()))
         .toList();
   }
   
-  static LatLng? _getDestinationCoordinates(String destination) {
-    // Coordenadas aproximadas de algunos municipios de Nariño
+  static LatLng? getDestinationCoordinates(String destination) {
+    // Coordenadas aproximadas de municipios de Nariño
     final coordinates = {
       'Pasto': const LatLng(1.2136, -77.2811),
       'Ipiales': const LatLng(0.8317, -77.6439),
@@ -162,6 +229,7 @@ class RoutesData {
       'Consacá': const LatLng(1.2167, -77.5167),
       'Yacuanquer': const LatLng(1.1333, -77.4167),
       'Tangua': const LatLng(1.0333, -77.7500),
+      'Tenagás': const LatLng(1.0167, -77.7167),
       'Funes': const LatLng(1.0167, -77.7167),
       'Guachucal': const LatLng(0.9833, -77.7667),
       'Cumbal': const LatLng(0.9167, -77.8000),
@@ -218,5 +286,12 @@ class RoutesData {
     };
 
     return coordinates[destination];
+  }
+  
+  // Método para obtener rutas hacia Pasto (compatibilidad con código existente)
+  static List<TransportRoute> getAllRoutesToPasto() {
+    return getAllRoutes()
+        .where((route) => route.destination.toLowerCase() == 'pasto')
+        .toList();
   }
 }

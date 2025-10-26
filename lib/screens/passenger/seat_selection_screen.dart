@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../models/schedule_model.dart';
 import '../../models/vehicle_model.dart';
+import '../../data/routes_data.dart';
+import '../../data/popular_routes_manager.dart';
+import '../../features/passenger/screens/route_map_screen.dart';
+import '../../services/route_tracing_service.dart';
+import '../../models/booking.dart';
+import '../../services/booking_service.dart';
 
 class SeatSelectionScreen extends StatefulWidget {
   final Schedule schedule;
@@ -19,6 +25,7 @@ class SeatSelectionScreen extends StatefulWidget {
 
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   List<String> selectedSeats = [];
+  PickupPoint? selectedPickupPoint;
   
   @override
   Widget build(BuildContext context) {
@@ -133,11 +140,82 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                   ],
                 ),
                 const SizedBox(height: 16),
+                
+                // Selección de punto de recogida
+                if (selectedSeats.length == widget.passengers) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.indigo.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.indigo.shade200),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.location_on, color: Colors.indigo.shade600, size: 20),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Punto de recogida',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (selectedPickupPoint != null) ...[
+                          Text(
+                            selectedPickupPoint!.name,
+                            style: TextStyle(
+                              color: Colors.indigo.shade700,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          Text(
+                            selectedPickupPoint!.description,
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ] else ...[
+                          const Text(
+                            'Selecciona un punto de recogida en el mapa',
+                            style: TextStyle(
+                              color: Colors.grey,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: _selectPickupPoint,
+                            icon: const Icon(Icons.map),
+                            label: Text(selectedPickupPoint != null ? 'Cambiar punto' : 'Seleccionar punto'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.indigo,
+                              side: const BorderSide(color: Colors.indigo),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                
                 SizedBox(
                   width: double.infinity,
                   height: 50,
                   child: ElevatedButton(
-                    onPressed: selectedSeats.length == widget.passengers
+                    onPressed: selectedSeats.length == widget.passengers && selectedPickupPoint != null
                         ? _proceedToBooking
                         : null,
                     style: ElevatedButton.styleFrom(
@@ -148,9 +226,7 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                       ),
                     ),
                     child: Text(
-                      selectedSeats.length == widget.passengers
-                          ? 'Continuar con la Reserva'
-                          : 'Selecciona ${widget.passengers - selectedSeats.length} asiento(s) más',
+                      _getButtonText(),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -313,6 +389,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
               Text('Fecha: ${DateFormat('dd/MM/yyyy').format(widget.schedule.departureTime)}'),
               Text('Hora: ${DateFormat('HH:mm').format(widget.schedule.departureTime)}'),
               Text('Asientos: ${selectedSeats.join(', ')}'),
+              if (selectedPickupPoint != null)
+                Text('Punto de recogida: ${selectedPickupPoint!.name}'),
               Text('Total: \$${NumberFormat('#,###').format(selectedSeats.length * widget.schedule.price)}'),
             ],
           ),
@@ -338,11 +416,69 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     );
   }
 
-  void _confirmBooking() {
+  String _getButtonText() {
+    if (selectedSeats.length < widget.passengers) {
+      return 'Selecciona ${widget.passengers - selectedSeats.length} asiento(s) más';
+    } else if (selectedPickupPoint == null) {
+      return 'Selecciona punto de recogida';
+    } else {
+      return 'Continuar con la Reserva';
+    }
+  }
+
+  void _selectPickupPoint() async {
+    final result = await Navigator.push<PickupPoint>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RouteMapScreen(
+          origin: widget.schedule.route.origin,
+          destination: widget.schedule.route.destination,
+          onPickupPointSelected: (point) {
+            setState(() {
+              selectedPickupPoint = point;
+            });
+          },
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        selectedPickupPoint = result;
+      });
+    }
+  }
+
+  void _confirmBooking() async {
+    // Crear la reserva
+    final booking = Booking(
+      id: BookingService.generateBookingId(),
+      origin: widget.schedule.route.origin,
+      destination: widget.schedule.route.destination,
+      departureDate: widget.schedule.departureTime,
+      departureTime: DateFormat('HH:mm').format(widget.schedule.departureTime),
+      selectedSeats: selectedSeats,
+      totalPrice: selectedSeats.length * widget.schedule.price,
+      pickupPointName: selectedPickupPoint?.name ?? 'No especificado',
+      pickupPointDescription: selectedPickupPoint?.description ?? 'No especificado',
+      pickupPointCoordinates: selectedPickupPoint?.coordinates ?? 
+          RoutesData.getDestinationCoordinates(widget.schedule.route.origin)!,
+      bookingDate: DateTime.now(),
+    );
+
+    // Guardar la reserva en el historial
+    await BookingService.saveBooking(booking);
+    
+    // Registrar la reserva en el sistema de rutas populares
+    PopularRoutesManager.recordBooking(
+      widget.schedule.route.origin, 
+      widget.schedule.route.destination
+    );
+    
     // Mostrar mensaje de éxito y regresar
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('¡Reserva confirmada exitosamente!'),
+        content: Text('¡Reserva confirmada y guardada en el historial!'),
         backgroundColor: Colors.green,
       ),
     );

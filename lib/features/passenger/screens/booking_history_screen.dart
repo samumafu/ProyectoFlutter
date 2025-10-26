@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../data/models/ticket_model.dart';
-import 'rating_screen.dart';
+import '../../../models/booking.dart';
+import '../../../services/booking_service.dart';
+import 'route_map_screen.dart';
+import '../../../services/route_tracing_service.dart';
 
 class BookingHistoryScreen extends StatefulWidget {
   const BookingHistoryScreen({super.key});
@@ -10,151 +12,32 @@ class BookingHistoryScreen extends StatefulWidget {
   State<BookingHistoryScreen> createState() => _BookingHistoryScreenState();
 }
 
-class _BookingHistoryScreenState extends State<BookingHistoryScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  
-  // Datos de ejemplo para el historial de reservas
-  final List<Booking> _upcomingBookings = [
-    Booking(
-      id: 'BK001',
-      ticketId: 'TK001',
-      userId: 'user123',
-      passengerCount: 2,
-      totalPrice: 120000,
-      bookingDate: DateTime.now().subtract(const Duration(days: 2)),
-      status: BookingStatus.confirmed,
-      seatNumbers: ['A12', 'A13'],
-      ticket: Ticket(
-        id: 'TK001',
-        routeId: 'route_001',
-        companyId: 'comp_001',
-        companyName: 'Expreso Bolivariano',
-        companyLogo: '',
-        origin: 'Bogotá',
-        destination: 'Medellín',
-        departureTime: DateTime.now().subtract(const Duration(days: 5)),
-        arrivalTime: DateTime.now().subtract(const Duration(days: 5, hours: -8)),
-        price: 85000,
-        availableSeats: 0,
-        totalSeats: 40,
-        busType: 'Ejecutivo',
-        amenities: ['WiFi', 'Aire Acondicionado', 'Baño'],
-        rating: 4.5,
-        reviewCount: 234,
-        duration: '8h 30m',
-        isDirectRoute: true,
-        stops: [],
-      ),
-    ),
-    Booking(
-      id: 'BK002',
-      ticketId: 'TK002',
-      userId: 'user123',
-      passengerCount: 1,
-      totalPrice: 45000,
-      bookingDate: DateTime.now().subtract(const Duration(days: 1)),
-      status: BookingStatus.confirmed,
-      seatNumbers: ['B08'],
-      ticket: Ticket(
-        id: 'TK002',
-        routeId: 'route_002',
-        companyId: 'comp_002',
-        companyName: 'Copetran',
-        companyLogo: '',
-        origin: 'Cali',
-        destination: 'Cartagena',
-        departureTime: DateTime.now().subtract(const Duration(days: 15)),
-        arrivalTime: DateTime.now().subtract(const Duration(days: 15, hours: -10)),
-        price: 120000,
-        availableSeats: 0,
-        totalSeats: 45,
-        busType: 'VIP',
-        amenities: ['WiFi', 'Aire Acondicionado', 'Baño', 'Entretenimiento'],
-        rating: 4.7,
-        reviewCount: 189,
-        duration: '10h 15m',
-        isDirectRoute: false,
-        stops: ['Buga', 'Pereira'],
-      ),
-    ),
-  ];
-
-  final List<Booking> _pastBookings = [
-    Booking(
-      id: 'BK003',
-      ticketId: 'TK003',
-      userId: 'user123',
-      passengerCount: 1,
-      totalPrice: 35000,
-      bookingDate: DateTime.now().subtract(const Duration(days: 15)),
-      status: BookingStatus.completed,
-      seatNumbers: ['C05'],
-      ticket: Ticket(
-        id: 'TK003',
-        routeId: 'route_003',
-        companyId: 'comp_003',
-        companyName: 'Flota Magdalena',
-        companyLogo: '',
-        origin: 'Medellín',
-        destination: 'Bogotá',
-        departureTime: DateTime.now().subtract(const Duration(days: 30)),
-        arrivalTime: DateTime.now().subtract(const Duration(days: 30, hours: -9)),
-        price: 75000,
-        availableSeats: 0,
-        totalSeats: 38,
-        busType: 'Ejecutivo',
-        amenities: ['WiFi', 'Aire Acondicionado'],
-        rating: 4.2,
-        reviewCount: 156,
-        duration: '9h 00m',
-        isDirectRoute: true,
-        stops: [],
-      ),
-    ),
-    Booking(
-      id: 'BK004',
-      ticketId: 'TK004',
-      userId: 'user123',
-      passengerCount: 2,
-      totalPrice: 90000,
-      bookingDate: DateTime.now().subtract(const Duration(days: 30)),
-      status: BookingStatus.cancelled,
-      seatNumbers: ['A01', 'A02'],
-      ticket: Ticket(
-        id: 'TK004',
-        routeId: 'route_004',
-        companyId: 'comp_004',
-        companyName: 'Brasilia',
-        companyLogo: '',
-        origin: 'Barranquilla',
-        destination: 'Santa Marta',
-        departureTime: DateTime.now().subtract(const Duration(days: 45)),
-        arrivalTime: DateTime.now().subtract(const Duration(days: 45, hours: -2)),
-        price: 35000,
-        availableSeats: 0,
-        totalSeats: 42,
-        busType: 'Corriente',
-        amenities: ['Aire Acondicionado'],
-        rating: 3.8,
-        reviewCount: 98,
-        duration: '2h 30m',
-        isDirectRoute: true,
-        stops: [],
-      ),
-    ),
-  ];
+class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
+  List<Booking> _bookings = [];
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _loadBookings();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
+  Future<void> _loadBookings() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final bookings = await BookingService.getBookingsSortedByDate();
+      setState(() {
+        _bookings = bookings;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -164,435 +47,218 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
         title: const Text('Mis Reservas'),
         backgroundColor: Colors.indigo,
         foregroundColor: Colors.white,
-        bottom: TabBar(
-          controller: _tabController,
-          indicatorColor: Colors.white,
-          labelColor: Colors.white,
-          unselectedLabelColor: Colors.white70,
-          tabs: const [
-            Tab(text: 'Próximos Viajes'),
-            Tab(text: 'Historial'),
+      ),
+      body: _buildBookings(),
+    );
+  }
+
+  Widget _buildBookings() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_bookings.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.history,
+              size: 80,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No tienes reservas aún',
+              style: TextStyle(
+                fontSize: 18,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tus reservas confirmadas aparecerán aquí',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[500],
+              ),
+            ),
           ],
         ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _buildUpcomingBookings(),
-          _buildPastBookings(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompletedActions(Booking booking) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _showBookingDetails(booking),
-              icon: const Icon(Icons.info_outline),
-              label: const Text('Ver Detalles'),
-            ),
-          ),
-          const SizedBox(width: 12),
-          if (!booking.hasRatedDriver)
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _rateDriver(booking),
-                icon: const Icon(Icons.star_outline),
-                label: const Text('Calificar Conductor'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                ),
-              ),
-            )
-          else
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.star, color: Colors.green, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      'Calificado (${booking.driverRating}/5)',
-                      style: const TextStyle(
-                        color: Colors.green,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  void _rateDriver(Booking booking) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => RatingScreen(
-          booking: booking,
-          isRatingDriver: true,
-          onRatingSubmitted: (rating, comment, tags) {
-            _updateBookingRating(booking, rating, comment, tags, isDriver: true);
-          },
-        ),
-      ),
-    );
-  }
-
-  void _updateBookingRating(Booking booking, int rating, String comment, List<String> tags, {required bool isDriver}) {
-    setState(() {
-      if (isDriver) {
-        booking.driverRating = rating;
-        booking.driverComment = comment;
-        booking.driverTags = tags;
-        booking.hasRatedDriver = true;
-      } else {
-        booking.passengerRating = rating;
-        booking.passengerComment = comment;
-        booking.passengerTags = tags;
-        booking.hasRatedAsPassenger = true;
-      }
-    });
-
-    // Aquí se enviaría la calificación al servidor
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isDriver ? 'Calificación del conductor enviada' : 'Calificación como pasajero enviada'),
-        backgroundColor: Colors.green,
-      ),
-    );
-  }
-
-  Widget _buildUpcomingBookings() {
-    if (_upcomingBookings.isEmpty) {
-      return _buildEmptyState(
-        icon: Icons.event_available,
-        title: 'No tienes viajes próximos',
-        subtitle: 'Busca y reserva tu próximo viaje',
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _upcomingBookings.length,
-      itemBuilder: (context, index) {
-        final booking = _upcomingBookings[index];
-        return _buildBookingCard(booking, isUpcoming: true);
-      },
-    );
-  }
-
-  Widget _buildPastBookings() {
-    if (_pastBookings.isEmpty) {
-      return _buildEmptyState(
-        icon: Icons.history,
-        title: 'No tienes historial de viajes',
-        subtitle: 'Tus viajes anteriores aparecerán aquí',
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _pastBookings.length,
-      itemBuilder: (context, index) {
-        final booking = _pastBookings[index];
-        return _buildBookingCard(booking, isUpcoming: false);
-      },
-    );
-  }
-
-  Widget _buildEmptyState({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            icon,
-            size: 80,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            subtitle,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey.shade500,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+    return RefreshIndicator(
+      onRefresh: _loadBookings,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        itemCount: _bookings.length,
+        itemBuilder: (context, index) {
+          final booking = _bookings[index];
+          return _buildBookingCard(booking);
+        },
       ),
     );
   }
 
-  Widget _buildBookingCard(Booking booking, {required bool isUpcoming}) {
+  Widget _buildBookingCard(Booking booking) {
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Column(
-        children: [
-          _buildBookingHeader(booking),
-          _buildRouteInfo(booking.ticket),
-          _buildBookingDetails(booking),
-          if (isUpcoming) _buildUpcomingActions(booking),
-          if (!isUpcoming && booking.status == BookingStatus.completed) 
-            _buildCompletedActions(booking),
-        ],
+      child: InkWell(
+        onTap: () => _showBookingDetails(booking),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header con estado
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Reserva #${booking.id.substring(booking.id.length - 6)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                  _buildStatusChip(booking.status),
+                ],
+              ),
+              const SizedBox(height: 12),
+              
+              // Ruta
+              Row(
+                children: [
+                  const Icon(Icons.location_on, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${booking.origin} → ${booking.destination}',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              // Fecha y hora
+              Row(
+                children: [
+                  const Icon(Icons.schedule, color: Colors.orange, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${booking.formattedDepartureDate} - ${booking.departureTime}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              // Asientos
+              Row(
+                children: [
+                  const Icon(Icons.airline_seat_recline_normal, color: Colors.blue, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    booking.seatsText,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              
+              // Precio
+              Row(
+                children: [
+                  const Icon(Icons.attach_money, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    '\$${booking.totalPrice.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+              
+              // Punto de recogida
+              if (booking.pickupPointName != 'No especificado') ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.my_location, color: Colors.purple, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        booking.pickupPointName,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildBookingHeader(Booking booking) {
-    Color statusColor;
-    String statusText;
-    IconData statusIcon;
-
-    switch (booking.status) {
+  Widget _buildStatusChip(BookingStatus status) {
+    Color color;
+    String text;
+    
+    switch (status) {
       case BookingStatus.confirmed:
-        statusColor = Colors.green;
-        statusText = 'Confirmado';
-        statusIcon = Icons.check_circle;
-        break;
-      case BookingStatus.pending:
-        statusColor = Colors.orange;
-        statusText = 'Pendiente';
-        statusIcon = Icons.schedule;
+        color = Colors.green;
+        text = 'Confirmada';
         break;
       case BookingStatus.cancelled:
-        statusColor = Colors.red;
-        statusText = 'Cancelado';
-        statusIcon = Icons.cancel;
+        color = Colors.red;
+        text = 'Cancelada';
         break;
       case BookingStatus.completed:
-        statusColor = Colors.blue;
-        statusText = 'Completado';
-        statusIcon = Icons.done_all;
+        color = Colors.blue;
+        text = 'Completada';
         break;
     }
-
+    
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: statusColor.withOpacity(0.1),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          topRight: Radius.circular(12),
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.3)),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
-      ),
-      child: Row(
-        children: [
-          Icon(statusIcon, color: statusColor, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Reserva #${booking.id}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                  ),
-                ),
-                Text(
-                  'Reservado el ${DateFormat('dd/MM/yyyy').format(booking.bookingDate)}',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: statusColor,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              statusText,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w500,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRouteInfo(Ticket ticket) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  ticket.origin,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  ticket.departureTimeFormatted,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Column(
-            children: [
-              Icon(
-                Icons.arrow_forward,
-                color: Colors.indigo,
-                size: 24,
-              ),
-              Text(
-                ticket.duration,
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  ticket.destination,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  ticket.arrivalTimeFormatted,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBookingDetails(Booking booking) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade200),
-        ),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Icon(Icons.business, size: 16, color: Colors.grey.shade600),
-              const SizedBox(width: 8),
-              Text(booking.ticket.companyName),
-              const Spacer(),
-              Icon(Icons.airline_seat_recline_normal, size: 16, color: Colors.grey.shade600),
-              const SizedBox(width: 8),
-              Text('${booking.passengerCount} ${booking.passengerCount == 1 ? 'pasajero' : 'pasajeros'}'),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(Icons.event_seat, size: 16, color: Colors.grey.shade600),
-              const SizedBox(width: 8),
-              Text('Asientos: ${booking.seatNumbers.join(', ')}'),
-              const Spacer(),
-              Text(
-                '\$${booking.totalPrice.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: Colors.indigo,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildUpcomingActions(Booking booking) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _showBookingDetails(booking),
-              icon: const Icon(Icons.info_outline),
-              label: const Text('Ver Detalles'),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () => _cancelBooking(booking),
-              icon: const Icon(Icons.cancel_outlined),
-              label: const Text('Cancelar'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -614,47 +280,82 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Handle
               Center(
                 child: Container(
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: Colors.grey[300],
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               const SizedBox(height: 20),
-              Text(
-                'Detalles de la Reserva',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+              
+              // Título
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Detalles de la Reserva',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  _buildStatusChip(booking.status),
+                ],
               ),
               const SizedBox(height: 20),
+              
+              // Detalles
               Expanded(
                 child: SingleChildScrollView(
                   controller: scrollController,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildDetailItem('Código de Reserva', booking.id),
+                      _buildDetailItem('ID de Reserva', booking.id),
+                      _buildDetailItem('Origen', booking.origin),
+                      _buildDetailItem('Destino', booking.destination),
+                      _buildDetailItem('Fecha de Viaje', booking.formattedDepartureDate),
+                      _buildDetailItem('Hora de Salida', booking.departureTime),
+                      _buildDetailItem('Asientos', booking.selectedSeats.join(', ')),
+                      _buildDetailItem('Punto de Recogida', booking.pickupPointName),
+                      _buildDetailItem('Descripción del Punto', booking.pickupPointDescription),
+                      _buildDetailItem('Total Pagado', '\$${booking.totalPrice.toStringAsFixed(0)}'),
                       _buildDetailItem('Fecha de Reserva', 
                         DateFormat('dd/MM/yyyy HH:mm').format(booking.bookingDate)),
-                      _buildDetailItem('Empresa', booking.ticket.companyName),
-                      _buildDetailItem('Tipo de Bus', booking.ticket.busType),
-                      _buildDetailItem('Ruta', '${booking.ticket.origin} → ${booking.ticket.destination}'),
-                      _buildDetailItem('Fecha de Viaje', 
-                        DateFormat('EEEE, dd MMMM yyyy', 'es').format(booking.ticket.departureTime)),
-                      _buildDetailItem('Hora de Salida', booking.ticket.departureTimeFormatted),
-                      _buildDetailItem('Hora de Llegada', booking.ticket.arrivalTimeFormatted),
-                      _buildDetailItem('Asientos', booking.seatNumbers.join(', ')),
-                      _buildDetailItem('Pasajeros', '${booking.passengerCount}'),
-                      _buildDetailItem('Total Pagado', '\$${booking.totalPrice.toStringAsFixed(0)}'),
                     ],
                   ),
                 ),
+              ),
+              
+              // Botones de acción
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showRouteOnMap(booking),
+                      icon: const Icon(Icons.map),
+                      label: const Text('Ver en Mapa'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  if (booking.status == BookingStatus.confirmed)
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _cancelBooking(booking),
+                        icon: const Icon(Icons.cancel),
+                        label: const Text('Cancelar'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ),
@@ -665,24 +366,41 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
 
   Widget _buildDetailItem(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.only(bottom: 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
             width: 120,
             child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.w500),
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w500,
+                color: Colors.grey[600],
+              ),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(color: Colors.grey.shade700),
+              style: const TextStyle(
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showRouteOnMap(Booking booking) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RouteMapScreen(
+          origin: booking.origin,
+          destination: booking.destination,
+        ),
       ),
     );
   }
@@ -692,29 +410,30 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen>
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Cancelar Reserva'),
-        content: const Text(
-          '¿Estás seguro de que deseas cancelar esta reserva? '
-          'Esta acción no se puede deshacer.',
-        ),
+        content: const Text('¿Estás seguro de que deseas cancelar esta reserva?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.pop(context),
             child: const Text('No'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              setState(() {
-                booking.status = BookingStatus.cancelled;
-                _upcomingBookings.remove(booking);
-                _pastBookings.insert(0, booking);
-              });
+            onPressed: () async {
+              Navigator.pop(context);
+              Navigator.pop(context); // Cerrar el modal de detalles
+              
+              await BookingService.updateBookingStatus(
+                booking.id, 
+                BookingStatus.cancelled
+              );
+              
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
                   content: Text('Reserva cancelada exitosamente'),
-                  backgroundColor: Colors.green,
+                  backgroundColor: Colors.orange,
                 ),
               );
+              
+              _loadBookings(); // Recargar la lista
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
