@@ -1,36 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/passenger/screens/passenger_home_screen.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/passenger/controllers/ticket_search_controller.dart';
 
 class TuFlotaApp extends StatelessWidget {
   const TuFlotaApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'TuFlota',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.indigo,
-          foregroundColor: Colors.white,
-          elevation: 0,
-        ),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
+    return ChangeNotifierProvider(
+      create: (context) => TicketSearchController()..initializeSampleData(),
+      child: MaterialApp(
+        title: 'TuFlota',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+          useMaterial3: true,
+          appBarTheme: const AppBarTheme(
             backgroundColor: Colors.indigo,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
+            elevation: 0,
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ),
+        home: const _RootNavigator(),
+        debugShowCheckedModeBanner: false,
       ),
-      home: const _RootNavigator(),
-      debugShowCheckedModeBanner: false,
     );
   }
 }

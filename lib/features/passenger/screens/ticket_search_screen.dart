@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import '../../../data/constants/narino_destinations.dart';
 import '../../../data/models/ticket_model.dart';
 import '../../../data/popular_routes_manager.dart';
-import '../../../screens/passenger/ticket_results_screen.dart';
+import '../../../widgets/city_search_widget.dart';
+import '../../../widgets/ai_recommendations_widget.dart';
+import '../../../services/city_search_service.dart';
+import '../../../services/user_preferences_service.dart';
 import 'map_selection_screen.dart';
+import 'ticket_results_screen.dart';
 import 'route_map_screen.dart';
-import 'package:latlong2/latlong.dart';
 
 class TicketSearchScreen extends StatefulWidget {
-  const TicketSearchScreen({super.key});
+  final String? initialOrigin;
+  final String? initialDestination;
+  
+  const TicketSearchScreen({
+    super.key,
+    this.initialOrigin,
+    this.initialDestination,
+  });
 
   @override
   State<TicketSearchScreen> createState() => _TicketSearchScreenState();
@@ -28,6 +39,41 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
   DateTime? _returnDate;
   int _passengers = 1;
   bool _isRoundTrip = false;
+  
+  // Búsquedas recientes del usuario (cargadas desde SharedPreferences)
+  List<String> _recentSearches = [];
+  final UserPreferencesService _prefsService = UserPreferencesService();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecentSearches();
+    
+    // Inicializar con valores iniciales si se proporcionan
+    if (widget.initialOrigin != null) {
+      _originController.text = widget.initialOrigin!;
+      _origin = widget.initialOrigin!;
+    }
+    if (widget.initialDestination != null) {
+      _destinationController.text = widget.initialDestination!;
+      _destination = widget.initialDestination!;
+    }
+  }
+
+  Future<void> _loadRecentSearches() async {
+    try {
+      final searches = await _prefsService.getRecentSearches();
+      setState(() {
+        _recentSearches = searches;
+      });
+    } catch (e) {
+      print('Error loading recent searches: $e');
+      // Fallback to default searches
+      setState(() {
+        _recentSearches = ['Pasto', 'Ipiales', 'Bogotá', 'Cali'];
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -106,10 +152,18 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildCityField(
-                      controller: _originController,
+                    child: CitySearchWidget(
                       label: 'Origen',
-                      icon: Icons.my_location,
+                      initialValue: _originController.text,
+                      recentSearches: _recentSearches,
+                      onCitySelected: (city) {
+                        setState(() {
+                          _originController.text = city['name'];
+                          _origin = city['name'];
+                          // Aquí podrías obtener coordenadas si las tienes
+                        });
+                        _addToRecentSearches(city['name']);
+                      },
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -126,10 +180,18 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: _buildCityField(
-                      controller: _destinationController,
+                    child: CitySearchWidget(
                       label: 'Destino',
-                      icon: Icons.location_on,
+                      initialValue: _destinationController.text,
+                      recentSearches: _recentSearches,
+                      onCitySelected: (city) {
+                        setState(() {
+                          _destinationController.text = city['name'];
+                          _destination = city['name'];
+                          // Aquí podrías obtener coordenadas si las tienes
+                        });
+                        _addToRecentSearches(city['name']);
+                      },
                     ),
                   ),
                 ],
@@ -191,6 +253,25 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.indigo,
                     side: const BorderSide(color: Colors.indigo),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Botón para recomendaciones de IA
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: _canShowRoute() ? _showAIRecommendations : null,
+                  icon: const Icon(Icons.psychology),
+                  label: const Text(
+                    'Recomendaciones IA',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.purple,
+                    foregroundColor: Colors.white,
                   ),
                 ),
               ),
@@ -526,6 +607,50 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
         ),
       ),
     );
+  }
+
+  void _showAIRecommendations() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.9,
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(20),
+            topRight: Radius.circular(20),
+          ),
+        ),
+        child: AIRecommendationsWidget(
+          origin: _originController.text,
+          destination: _destinationController.text,
+          preferredDate: _departureDate,
+          passengers: _passengers,
+        ),
+      ),
+    );
+  }
+
+  void _addToRecentSearches(String cityName) async {
+    setState(() {
+      // Remover si ya existe
+      _recentSearches.remove(cityName);
+      // Agregar al inicio
+      _recentSearches.insert(0, cityName);
+      // Mantener solo los últimos 10
+      if (_recentSearches.length > 10) {
+        _recentSearches = _recentSearches.take(10).toList();
+      }
+    });
+    
+    // Guardar en SharedPreferences para persistencia
+    try {
+      await _prefsService.addRecentSearch(cityName);
+    } catch (e) {
+      print('Error saving recent search: $e');
+    }
   }
 
   @override

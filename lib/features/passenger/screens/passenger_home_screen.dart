@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../data/constants/narino_destinations.dart';
 import '../../../data/popular_routes_manager.dart';
+import '../../../widgets/smart_travel_assistant.dart';
 import 'ticket_search_screen.dart';
 import 'booking_history_screen.dart';
 import 'edit_profile_screen.dart';
@@ -76,6 +77,7 @@ class HomeTab extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _buildWelcomeHeader(),
+            _buildSmartAssistantSection(),
             _buildQuickActions(context),
             _buildPopularRoutes(context),
             _buildRecentSearches(),
@@ -528,6 +530,28 @@ class HomeTab extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSmartAssistantSection() {
+    return Container(
+      margin: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.purple.shade400, Colors.purple.shade600],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.purple.withOpacity(0.3),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: const SmartTravelAssistant(),
     );
   }
 }
