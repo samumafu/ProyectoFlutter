@@ -32,9 +32,51 @@ class _TicketResultsScreenState extends State<TicketResultsScreen> {
   bool _showFilters = false;
 
   @override
+  void initState() {
+    super.initState();
+    print('🎯🎯🎯 TicketResultsScreen initState EJECUTADO');
+    print('🎯🎯🎯 Parámetros recibidos:');
+    print('🎯🎯🎯   - Origin: ${widget.origin}');
+    print('🎯🎯🎯   - Destination: ${widget.destination}');
+    print('🎯🎯🎯   - Date: ${widget.departureDate}');
+    
+    // Ejecutar búsqueda inmediatamente
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      print('🎯🎯🎯 PostFrameCallback ejecutándose...');
+      _executeSearch();
+    });
+    
+    // También ejecutar inmediatamente como respaldo
+    Future.delayed(Duration.zero, () {
+      print('🎯🎯🎯 Future.delayed ejecutándose como respaldo...');
+      _executeSearch();
+    });
+  }
+
+  void _executeSearch() {
+    print('🎯🎯🎯 _executeSearch INICIADO');
+    
+    final controller = Provider.of<TicketSearchController>(context, listen: false);
+    
+    print('🎯🎯🎯 Llamando controller.searchTickets...');
+    controller.searchTickets(
+      origin: widget.origin,
+      destination: widget.destination,
+      departureDate: widget.departureDate,
+      passengers: 1,
+    );
+    print('🎯🎯🎯 controller.searchTickets llamado');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    print('🎯🎯🎯 TicketResultsScreen build() ejecutándose');
+    
     return Consumer<TicketSearchController>(
       builder: (context, controller, child) {
+        print('🎯🎯🎯 Consumer builder ejecutándose');
+        print('🎯🎯🎯 Controller state: isLoading=${controller.isLoading}, tickets=${controller.filteredTickets.length}');
+        
         return Scaffold(
           appBar: AppBar(
             title: const Text('Resultados de Búsqueda'),

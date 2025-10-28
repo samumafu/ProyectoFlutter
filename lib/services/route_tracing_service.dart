@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as Math;
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -275,7 +276,7 @@ class RouteTracingService {
     return routePoints;
   }
 
-  /// Crea una ruta más realista entre dos puntos simulando carreteras
+  /// Crea una ruta más realista entre dos puntos simulando carreteras principales de Nariño
   static List<LatLng> _createRealisticPath(LatLng start, LatLng end) {
     List<LatLng> path = [];
     
@@ -283,28 +284,91 @@ class RouteTracingService {
     final distance = _distance.as(LengthUnit.Kilometer, start, end);
     final bearing = _distance.bearing(start, end);
     
-    // Número de puntos intermedios basado en la distancia
-    int numPoints = (distance / 5).ceil().clamp(3, 20); // Un punto cada 5km aproximadamente
+    // Número de puntos intermedios basado en la distancia (más puntos para rutas más largas)
+    int numPoints = (distance / 3).ceil().clamp(5, 30); // Un punto cada 3km aproximadamente
+    
+    // Determinar el tipo de ruta basado en las coordenadas
+    final routeType = _determineRouteType(start, end);
     
     for (int i = 1; i <= numPoints; i++) {
       double fraction = i / numPoints;
       
-      // Interpolación básica con pequeñas variaciones para simular carreteras
+      // Interpolación básica
       double lat = start.latitude + (end.latitude - start.latitude) * fraction;
       double lng = start.longitude + (end.longitude - start.longitude) * fraction;
       
-      // Agregar pequeñas variaciones para simular el trazado de carreteras
+      // Aplicar variaciones realistas basadas en el tipo de ruta
       if (i > 1 && i < numPoints) {
-        // Variación basada en la topografía simulada
-        double variation = 0.002 * (1 - 2 * (i % 2)); // Alternating small variations
-        lat += variation * (fraction * (1 - fraction)) * 2; // Curva suave
-        lng += variation * 0.5 * (fraction * (1 - fraction)) * 2;
+        final variations = _getRouteVariations(routeType, fraction, i, numPoints);
+        lat += variations['lat']!;
+        lng += variations['lng']!;
       }
       
       path.add(LatLng(lat, lng));
     }
     
     return path;
+  }
+
+  /// Determina el tipo de ruta basado en las coordenadas de inicio y fin
+  static String _determineRouteType(LatLng start, LatLng end) {
+    // Coordenadas aproximadas de regiones importantes
+    final pacifico = LatLng(1.8, -78.8); // Tumaco
+    final andina = LatLng(1.2, -77.3);   // Pasto
+    final frontera = LatLng(0.8, -77.6); // Ipiales
+    
+    final startToPacifico = _distance.as(LengthUnit.Kilometer, start, pacifico);
+    final startToAndina = _distance.as(LengthUnit.Kilometer, start, andina);
+    final startToFrontera = _distance.as(LengthUnit.Kilometer, start, frontera);
+    
+    final endToPacifico = _distance.as(LengthUnit.Kilometer, end, pacifico);
+    final endToAndina = _distance.as(LengthUnit.Kilometer, end, andina);
+    final endToFrontera = _distance.as(LengthUnit.Kilometer, end, frontera);
+    
+    // Ruta hacia la costa (más curvas por la topografía)
+    if (startToPacifico < 100 || endToPacifico < 100) {
+      return 'coastal';
+    }
+    // Ruta de montaña (curvas por la topografía andina)
+    else if ((startToAndina < 50 && endToFrontera < 50) || (startToFrontera < 50 && endToAndina < 50)) {
+      return 'mountain';
+    }
+    // Ruta de valle (más directa)
+    else {
+      return 'valley';
+    }
+  }
+
+  /// Obtiene variaciones específicas para cada tipo de ruta
+  static Map<String, double> _getRouteVariations(String routeType, double fraction, int pointIndex, int totalPoints) {
+    double latVariation = 0.0;
+    double lngVariation = 0.0;
+    
+    switch (routeType) {
+      case 'coastal':
+        // Rutas costeras: más curvas y desviaciones
+        latVariation = 0.004 * Math.sin(fraction * Math.pi * 3) * (fraction * (1 - fraction));
+        lngVariation = 0.003 * Math.cos(fraction * Math.pi * 2.5) * (fraction * (1 - fraction));
+        break;
+        
+      case 'mountain':
+        // Rutas de montaña: curvas serpenteantes
+        latVariation = 0.003 * Math.sin(fraction * Math.pi * 4) * (fraction * (1 - fraction));
+        lngVariation = 0.002 * Math.cos(fraction * Math.pi * 3) * (fraction * (1 - fraction));
+        // Agregar variación adicional para simular zigzag de montaña
+        if (pointIndex % 3 == 0) {
+          latVariation += 0.001 * (pointIndex % 2 == 0 ? 1 : -1);
+        }
+        break;
+        
+      case 'valley':
+        // Rutas de valle: más directas pero con algunas curvas suaves
+        latVariation = 0.002 * Math.sin(fraction * Math.pi * 2) * (fraction * (1 - fraction));
+        lngVariation = 0.0015 * Math.cos(fraction * Math.pi * 1.5) * (fraction * (1 - fraction));
+        break;
+    }
+    
+    return {'lat': latVariation, 'lng': lngVariation};
   }
 
   /// Obtiene puntos de recogida potenciales a lo largo de la ruta
@@ -381,21 +445,16 @@ class RouteTracingService {
   static List<PickupPoint> _generateNearbyPickupPoints(String municipality, LatLng center) {
     List<PickupPoint> nearbyPoints = [];
     
-    // Definir algunos puntos de interés comunes
-    final commonPlaces = [
-      {'name': 'Centro', 'offset': [0.002, 0.002]},
-      {'name': 'Plaza Principal', 'offset': [0.001, -0.001]},
-      {'name': 'Parque Central', 'offset': [-0.001, 0.001]},
-      {'name': 'Estación de Servicio', 'offset': [0.003, -0.002]},
-    ];
-
-    for (int i = 0; i < commonPlaces.length; i++) {
-      final place = commonPlaces[i];
+    // Definir puntos de interés específicos por municipio
+    final municipalityPlaces = _getMunicipalitySpecificPlaces(municipality);
+    
+    for (int i = 0; i < municipalityPlaces.length; i++) {
+      final place = municipalityPlaces[i];
       final offset = place['offset'] as List<double>;
       
       nearbyPoints.add(PickupPoint(
         id: '${municipality.toLowerCase()}_${i + 1}',
-        name: '${place['name']} - $municipality',
+        name: place['name'] as String,
         description: 'Punto de recogida en ${place['name']} de $municipality',
         coordinates: LatLng(
           center.latitude + offset[0],
@@ -407,6 +466,63 @@ class RouteTracingService {
     }
 
     return nearbyPoints;
+  }
+
+  /// Obtiene lugares específicos para cada municipio
+  static List<Map<String, dynamic>> _getMunicipalitySpecificPlaces(String municipality) {
+    final places = {
+      'Pasto': [
+        {'name': 'Centro Histórico', 'offset': [0.002, 0.002]},
+        {'name': 'Plaza de Nariño', 'offset': [0.001, -0.001]},
+        {'name': 'Universidad de Nariño', 'offset': [-0.003, 0.004]},
+        {'name': 'Terminal de Transportes', 'offset': [0.005, -0.003]},
+        {'name': 'Centro Comercial Unicentro', 'offset': [-0.002, 0.003]},
+        {'name': 'Aeropuerto Antonio Nariño', 'offset': [0.008, -0.005]},
+        {'name': 'Parque Infantil', 'offset': [-0.001, 0.001]},
+        {'name': 'Hospital Departamental', 'offset': [0.003, 0.002]},
+        {'name': 'Estadio Libertad', 'offset': [-0.004, -0.002]},
+        {'name': 'Bombona', 'offset': [0.006, 0.004]},
+      ],
+      'Ipiales': [
+        {'name': 'Santuario Las Lajas', 'offset': [0.015, -0.010]},
+        {'name': 'Centro de Ipiales', 'offset': [0.001, 0.001]},
+        {'name': 'Frontera con Ecuador', 'offset': [-0.005, -0.008]},
+        {'name': 'Plaza Principal', 'offset': [0.002, -0.001]},
+        {'name': 'Terminal de Transportes', 'offset': [0.003, 0.002]},
+        {'name': 'Mercado Municipal', 'offset': [-0.002, 0.003]},
+        {'name': 'Parque Central', 'offset': [0.001, -0.002]},
+        {'name': 'Hospital San Vicente', 'offset': [0.004, 0.001]},
+      ],
+      'Túquerres': [
+        {'name': 'Centro de Túquerres', 'offset': [0.001, 0.001]},
+        {'name': 'Plaza de Bolívar', 'offset': [0.002, -0.001]},
+        {'name': 'Terminal de Transportes', 'offset': [0.003, 0.002]},
+        {'name': 'Parque Principal', 'offset': [-0.001, 0.002]},
+        {'name': 'Iglesia San Bartolomé', 'offset': [0.001, -0.001]},
+        {'name': 'Estación de Policía', 'offset': [0.002, 0.003]},
+      ],
+      'Tumaco': [
+        {'name': 'Puerto de Tumaco', 'offset': [0.002, -0.005]},
+        {'name': 'Centro de Tumaco', 'offset': [0.001, 0.001]},
+        {'name': 'Playa El Morro', 'offset': [0.008, -0.003]},
+        {'name': 'Terminal Marítimo', 'offset': [0.003, -0.004]},
+        {'name': 'Mercado Público', 'offset': [-0.001, 0.002]},
+        {'name': 'Hospital San Andrés', 'offset': [0.004, 0.003]},
+        {'name': 'Aeropuerto La Florida', 'offset': [0.010, 0.008]},
+      ],
+    };
+
+    // Lugares genéricos para municipios no especificados
+    final genericPlaces = [
+      {'name': 'Centro', 'offset': [0.002, 0.002]},
+      {'name': 'Plaza Principal', 'offset': [0.001, -0.001]},
+      {'name': 'Parque Central', 'offset': [-0.001, 0.001]},
+      {'name': 'Terminal de Transportes', 'offset': [0.003, -0.002]},
+      {'name': 'Iglesia Principal', 'offset': [0.001, 0.002]},
+      {'name': 'Alcaldía Municipal', 'offset': [-0.002, -0.001]},
+    ];
+
+    return places[municipality] ?? genericPlaces;
   }
 
   /// Calcula la distancia total de la ruta
