@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../services/ai_travel_service.dart';
+import '../models/booking.dart';
+import '../services/booking_service.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:intl/intl.dart';
 
 class AIRecommendationsWidget extends StatefulWidget {
   final String origin;
@@ -370,27 +374,50 @@ class _AIRecommendationsWidgetState extends State<AIRecommendationsWidget>
               children: [
                 Icon(icon, color: color, size: 20),
                 const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: color,
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
                   ),
                 ),
+                // Agregar botón de reserva para ciertas recomendaciones
+                if (title == 'Rango de Precios' || title == 'Días Más Económicos')
+                  ElevatedButton.icon(
+                    onPressed: () => _createBookingFromRecommendation(title, items),
+                    icon: const Icon(Icons.book_online, size: 16),
+                    label: const Text('Reservar'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: color,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      textStyle: const TextStyle(fontSize: 12),
+                    ),
+                  ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             ...items.map((item) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.only(bottom: 8),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.check_circle, color: color.withOpacity(0.7), size: 16),
-                  const SizedBox(width: 8),
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(top: 6, right: 8),
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.6),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                   Expanded(
                     child: Text(
                       item.toString(),
-                      style: const TextStyle(fontSize: 14),
+                      style: const TextStyle(fontSize: 14, height: 1.4),
                     ),
                   ),
                 ],
@@ -400,6 +427,76 @@ class _AIRecommendationsWidgetState extends State<AIRecommendationsWidget>
         ),
       ),
     );
+  }
+
+  Future<void> _createBookingFromRecommendation(String recommendationType, List<dynamic> items) async {
+    try {
+      // Crear una reserva basada en las recomendaciones de IA
+      final booking = Booking(
+        id: BookingService.generateBookingId(),
+        origin: widget.origin,
+        destination: widget.destination,
+        departureDate: widget.preferredDate ?? DateTime.now().add(const Duration(days: 1)),
+        departureTime: '08:00', // Hora por defecto
+        selectedSeats: List.generate(widget.passengers, (index) => 'A${index + 1}'),
+        totalPrice: _extractPriceFromRecommendation(items),
+        pickupPointName: 'Terminal Principal',
+        pickupPointDescription: 'Terminal de transporte de ${widget.origin}',
+        pickupPointCoordinates: const LatLng(1.2136, -77.2811),
+        bookingDate: DateTime.now(),
+        status: BookingStatus.confirmed,
+      );
+
+      // Guardar la reserva
+      await BookingService.saveBooking(booking);
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Reserva desde IA Confirmada'),
+            content: Text(
+              'Has creado una reserva basada en las recomendaciones de IA:\n\n'
+              'Ruta: ${widget.origin} → ${widget.destination}\n'
+              'Fecha: ${DateFormat('dd/MM/yyyy').format(booking.departureDate)}\n'
+              'Pasajeros: ${widget.passengers}\n'
+              'Total estimado: \$${booking.totalPrice.toStringAsFixed(0)}\n\n'
+              'Tu reserva ha sido guardada en "Mis Viajes".',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Aceptar'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al crear la reserva: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  double _extractPriceFromRecommendation(List<dynamic> items) {
+    // Intentar extraer un precio de las recomendaciones
+    for (var item in items) {
+      final text = item.toString().toLowerCase();
+      final priceMatch = RegExp(r'\$?(\d+(?:,\d{3})*(?:\.\d{2})?)')
+          .firstMatch(text);
+      if (priceMatch != null) {
+        final priceStr = priceMatch.group(1)?.replaceAll(',', '') ?? '50000';
+        return double.tryParse(priceStr) ?? 50000.0;
+      }
+    }
+    // Precio por defecto si no se encuentra ninguno
+    return 50000.0;
   }
 
   Widget _buildAlternativeDatesCard() {

@@ -102,17 +102,21 @@ class RouteTracingService {
   static Future<List<LatLng>> _getRealRoute(LatLng start, LatLng end) async {
     try {
       // Usar OSRM API que es completamente gratuita y no requiere API key
-      final url = Uri.parse('https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson');
+      final url = Uri.parse('https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true');
       
       print('Consultando OSRM API: $url');
       
-      final response = await http.get(url);
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Timeout en OSRM API');
+        },
+      );
       
       print('Respuesta OSRM - Status: ${response.statusCode}');
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        print('Datos recibidos: ${data.toString().substring(0, 200)}...');
         
         if (data['routes'] != null && data['routes'].isNotEmpty) {
           final route = data['routes'][0];
@@ -125,8 +129,11 @@ class RouteTracingService {
               return LatLng(coord[1].toDouble(), coord[0].toDouble());
             }).toList();
             
-            print('Ruta real obtenida con ${routePoints.length} puntos');
-            return routePoints;
+            // Optimizar la ruta para mejor rendimiento (reducir puntos si hay demasiados)
+            final optimizedRoute = _optimizeRoute(routePoints);
+            
+            print('Ruta real obtenida con ${optimizedRoute.length} puntos optimizados');
+            return optimizedRoute;
           }
         }
       } else {
@@ -134,9 +141,111 @@ class RouteTracingService {
       }
     } catch (e) {
       print('Error en API de rutas OSRM: $e');
+      // Intentar con servidor alternativo de OSRM
+      return await _getRealRouteAlternative(start, end);
     }
     
     return [];
+  }
+
+  /// Servidor alternativo de OSRM en caso de que el principal falle
+  static Future<List<LatLng>> _getRealRouteAlternative(LatLng start, LatLng end) async {
+    try {
+      // Usar servidor alternativo de OSRM
+      final url = Uri.parse('https://routing.openstreetmap.de/routed-car/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson');
+      
+      print('Consultando OSRM alternativo: $url');
+      
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          throw Exception('Timeout en OSRM alternativo');
+        },
+      );
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          if (route['geometry'] != null && route['geometry']['coordinates'] != null) {
+            final coordinates = route['geometry']['coordinates'] as List;
+            
+            final routePoints = coordinates.map<LatLng>((coord) {
+              return LatLng(coord[1].toDouble(), coord[0].toDouble());
+            }).toList();
+            
+            final optimizedRoute = _optimizeRoute(routePoints);
+            print('Ruta alternativa obtenida con ${optimizedRoute.length} puntos');
+            return optimizedRoute;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error en OSRM alternativo: $e');
+    }
+    
+    return [];
+  }
+
+  /// Optimiza la ruta reduciendo puntos redundantes para mejor rendimiento
+  static List<LatLng> _optimizeRoute(List<LatLng> route) {
+    if (route.length <= 50) return route;
+    
+    List<LatLng> optimized = [route.first];
+    
+    // Usar algoritmo de Douglas-Peucker simplificado
+    double tolerance = 0.001; // ~100m de tolerancia
+    
+    for (int i = 1; i < route.length - 1; i++) {
+      final prev = optimized.last;
+      final current = route[i];
+      final next = route[i + 1];
+      
+      // Calcular si el punto actual es significativo
+      if (_isSignificantPoint(prev, current, next, tolerance)) {
+        optimized.add(current);
+      }
+    }
+    
+    optimized.add(route.last);
+    return optimized;
+  }
+
+  /// Determina si un punto es significativo en la ruta
+  static bool _isSignificantPoint(LatLng prev, LatLng current, LatLng next, double tolerance) {
+    // Calcular la distancia perpendicular del punto actual a la línea prev-next
+    final distance = _perpendicularDistance(current, prev, next);
+    return distance > tolerance;
+  }
+
+  /// Calcula la distancia perpendicular de un punto a una línea
+  static double _perpendicularDistance(LatLng point, LatLng lineStart, LatLng lineEnd) {
+    final A = point.latitude - lineStart.latitude;
+    final B = point.longitude - lineStart.longitude;
+    final C = lineEnd.latitude - lineStart.latitude;
+    final D = lineEnd.longitude - lineStart.longitude;
+    
+    final dot = A * C + B * D;
+    final lenSq = C * C + D * D;
+    
+    if (lenSq == 0) return _distance.as(LengthUnit.Kilometer, point, lineStart);
+    
+    final param = dot / lenSq;
+    
+    LatLng projection;
+    if (param < 0) {
+      projection = lineStart;
+    } else if (param > 1) {
+      projection = lineEnd;
+    } else {
+      projection = LatLng(
+        lineStart.latitude + param * C,
+        lineStart.longitude + param * D,
+      );
+    }
+    
+    return _distance.as(LengthUnit.Kilometer, point, projection);
   }
 
   /// Método de respaldo usando el sistema anterior

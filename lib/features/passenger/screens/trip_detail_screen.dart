@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../data/models/ticket_model.dart';
+import '../../../data/models/ticket_model.dart' hide Booking, BookingStatus;
+import '../../../models/booking.dart';
+import '../../../services/booking_service.dart';
+import 'package:latlong2/latlong.dart';
 
 class TicketDetailScreen extends StatefulWidget {
   final Ticket ticket;
@@ -569,28 +572,60 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     }
   }
 
-  void _proceedToBooking() {
-    // Aquí iría la lógica para proceder con la reserva
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reserva Confirmada'),
-        content: Text(
-          'Has reservado $_selectedSeats ${_selectedSeats == 1 ? 'asiento' : 'asientos'} '
-          'para el viaje de ${widget.ticket.origin} a ${widget.ticket.destination}.\n\n'
-          'Total: \$${(widget.ticket.price * _selectedSeats).toStringAsFixed(0)}',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('Aceptar'),
+  void _proceedToBooking() async {
+    try {
+      // Crear la reserva
+      final booking = Booking(
+        id: BookingService.generateBookingId(),
+        origin: widget.ticket.origin,
+        destination: widget.ticket.destination,
+        departureDate: widget.ticket.departureTime, // Usar departureTime como fecha
+        departureTime: DateFormat('HH:mm').format(widget.ticket.departureTime),
+        selectedSeats: List.generate(_selectedSeats, (index) => 'A${index + 1}'),
+        totalPrice: widget.ticket.price * _selectedSeats,
+        pickupPointName: 'Terminal Principal',
+        pickupPointDescription: 'Terminal de transporte de ${widget.ticket.origin}',
+        pickupPointCoordinates: const LatLng(1.2136, -77.2811), // Coordenadas por defecto
+        bookingDate: DateTime.now(),
+        status: BookingStatus.confirmed,
+      );
+
+      // Guardar la reserva
+      await BookingService.saveBooking(booking);
+
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Reserva Confirmada'),
+            content: Text(
+              'Has reservado $_selectedSeats ${_selectedSeats == 1 ? 'asiento' : 'asientos'} '
+              'para el viaje de ${widget.ticket.origin} a ${widget.ticket.destination}.\n\n'
+              'Total: \$${(widget.ticket.price * _selectedSeats).toStringAsFixed(0)}\n\n'
+              'Tu reserva ha sido guardada en "Mis Viajes".',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pop();
+                },
+                child: const Text('Aceptar'),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al crear la reserva: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 }

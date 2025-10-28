@@ -1,36 +1,9 @@
 import '../data/constants/narino_destinations.dart';
 
 class CitySearchService {
-  // Ciudades principales de Colombia para búsqueda ampliada
-  static const List<Map<String, String>> colombianCities = [
-    {'name': 'Bogotá', 'region': 'Cundinamarca', 'type': 'capital'},
-    {'name': 'Medellín', 'region': 'Antioquia', 'type': 'principal'},
-    {'name': 'Cali', 'region': 'Valle del Cauca', 'type': 'principal'},
-    {'name': 'Barranquilla', 'region': 'Atlántico', 'type': 'principal'},
-    {'name': 'Cartagena', 'region': 'Bolívar', 'type': 'principal'},
-    {'name': 'Bucaramanga', 'region': 'Santander', 'type': 'principal'},
-    {'name': 'Pereira', 'region': 'Risaralda', 'type': 'principal'},
-    {'name': 'Manizales', 'region': 'Caldas', 'type': 'principal'},
-    {'name': 'Armenia', 'region': 'Quindío', 'type': 'principal'},
-    {'name': 'Ibagué', 'region': 'Tolima', 'type': 'principal'},
-    {'name': 'Neiva', 'region': 'Huila', 'type': 'principal'},
-    {'name': 'Villavicencio', 'region': 'Meta', 'type': 'principal'},
-    {'name': 'Popayán', 'region': 'Cauca', 'type': 'principal'},
-    {'name': 'Montería', 'region': 'Córdoba', 'type': 'principal'},
-    {'name': 'Valledupar', 'region': 'Cesar', 'type': 'principal'},
-    {'name': 'Santa Marta', 'region': 'Magdalena', 'type': 'principal'},
-    {'name': 'Sincelejo', 'region': 'Sucre', 'type': 'principal'},
-    {'name': 'Riohacha', 'region': 'La Guajira', 'type': 'principal'},
-    {'name': 'Quibdó', 'region': 'Chocó', 'type': 'principal'},
-    {'name': 'Florencia', 'region': 'Caquetá', 'type': 'principal'},
-    {'name': 'Mocoa', 'region': 'Putumayo', 'type': 'principal'},
-    {'name': 'Yopal', 'region': 'Casanare', 'type': 'principal'},
-    {'name': 'Arauca', 'region': 'Arauca', 'type': 'principal'},
-    {'name': 'Tunja', 'region': 'Boyacá', 'type': 'principal'},
-    {'name': 'Cúcuta', 'region': 'Norte de Santander', 'type': 'principal'},
-  ];
+  // SOLO MUNICIPIOS DE NARIÑO - No incluir otras ciudades de Colombia
 
-  /// Busca ciudades basándose en el texto de consulta
+  /// Busca ciudades basándose en el texto de consulta - SOLO MUNICIPIOS DE NARIÑO
   static List<Map<String, dynamic>> searchCities(String query) {
     if (query.isEmpty) {
       return _getAllCities();
@@ -39,7 +12,7 @@ class CitySearchService {
     final normalizedQuery = _normalizeText(query);
     final results = <Map<String, dynamic>>[];
 
-    // Buscar en municipios de Nariño
+    // Buscar ÚNICAMENTE en municipios de Nariño
     for (final municipality in NarinoDestinations.municipalities) {
       final normalizedMunicipality = _normalizeText(municipality);
       final region = NarinoDestinations.getRegionForDestination(municipality);
@@ -57,43 +30,21 @@ class CitySearchService {
       }
     }
 
-    // Buscar en ciudades principales de Colombia
-    for (final city in colombianCities) {
-      final normalizedCity = _normalizeText(city['name']!);
-      final normalizedRegion = _normalizeText(city['region']!);
-
-      if (normalizedCity.contains(normalizedQuery) ||
-          normalizedRegion.contains(normalizedQuery)) {
-        results.add({
-          'name': city['name']!,
-          'region': city['region']!,
-          'type': city['type']!,
-          'priority': normalizedCity.startsWith(normalizedQuery) ? 1 : 3,
-          'isLocal': false,
-        });
-      }
-    }
-
     // Ordenar por prioridad y relevancia
     results.sort((a, b) {
       final priorityComparison = a['priority'].compareTo(b['priority']);
       if (priorityComparison != 0) return priorityComparison;
-      
-      // Priorizar ciudades locales de Nariño
-      if (a['isLocal'] && !b['isLocal']) return -1;
-      if (!a['isLocal'] && b['isLocal']) return 1;
-      
       return a['name'].compareTo(b['name']);
     });
 
     return results.take(20).toList(); // Limitar a 20 resultados
   }
 
-  /// Obtiene todas las ciudades disponibles
+  /// Obtiene todas las ciudades disponibles - SOLO MUNICIPIOS DE NARIÑO
   static List<Map<String, dynamic>> _getAllCities() {
     final results = <Map<String, dynamic>>[];
 
-    // Agregar municipios de Nariño primero
+    // Agregar ÚNICAMENTE municipios de Nariño
     for (final municipality in NarinoDestinations.municipalities) {
       final region = NarinoDestinations.getRegionForDestination(municipality);
       results.add({
@@ -105,54 +56,29 @@ class CitySearchService {
       });
     }
 
-    // Agregar ciudades principales de Colombia
-    for (final city in colombianCities) {
+    return results;
+  }
+
+  /// Obtiene ciudades por región específica - SOLO NARIÑO
+  static List<Map<String, dynamic>> getCitiesByRegion(String region) {
+    final results = <Map<String, dynamic>>[];
+
+    // Solo devolver municipios de Nariño
+    for (final municipality in NarinoDestinations.municipalities) {
+      final municipalityRegion = NarinoDestinations.getRegionForDestination(municipality);
       results.add({
-        'name': city['name']!,
-        'region': city['region']!,
-        'type': city['type']!,
-        'priority': 2,
-        'isLocal': false,
+        'name': municipality,
+        'region': 'Nariño - $municipalityRegion',
+        'type': 'municipality',
+        'priority': 1,
+        'isLocal': true,
       });
     }
 
     return results;
   }
 
-  /// Obtiene ciudades por región específica
-  static List<Map<String, dynamic>> getCitiesByRegion(String region) {
-    final results = <Map<String, dynamic>>[];
-
-    if (region == 'Nariño') {
-      for (final municipality in NarinoDestinations.municipalities) {
-        final municipalityRegion = NarinoDestinations.getRegionForDestination(municipality);
-        results.add({
-          'name': municipality,
-          'region': 'Nariño - $municipalityRegion',
-          'type': 'municipality',
-          'priority': 1,
-          'isLocal': true,
-        });
-      }
-    } else {
-      // Buscar en ciudades principales por región
-      for (final city in colombianCities) {
-        if (city['region'] == region) {
-          results.add({
-            'name': city['name']!,
-            'region': city['region']!,
-            'type': city['type']!,
-            'priority': 1,
-            'isLocal': false,
-          });
-        }
-      }
-    }
-
-    return results;
-  }
-
-  /// Obtiene las ciudades más populares para mostrar por defecto
+  /// Obtiene las ciudades más populares para mostrar por defecto - SOLO NARIÑO
   static List<Map<String, dynamic>> getPopularCities() {
     return [
       // Ciudades principales de Nariño
@@ -160,12 +86,8 @@ class CitySearchService {
       {'name': 'Ipiales', 'region': 'Nariño - Norte', 'type': 'municipality', 'isLocal': true},
       {'name': 'Tumaco', 'region': 'Nariño - Pacífico', 'type': 'municipality', 'isLocal': true},
       {'name': 'Túquerres', 'region': 'Nariño - Norte', 'type': 'municipality', 'isLocal': true},
-      
-      // Ciudades principales de Colombia
-      {'name': 'Bogotá', 'region': 'Cundinamarca', 'type': 'capital', 'isLocal': false},
-      {'name': 'Cali', 'region': 'Valle del Cauca', 'type': 'principal', 'isLocal': false},
-      {'name': 'Medellín', 'region': 'Antioquia', 'type': 'principal', 'isLocal': false},
-      {'name': 'Popayán', 'region': 'Cauca', 'type': 'principal', 'isLocal': false},
+      {'name': 'Samaniego', 'region': 'Nariño - Norte', 'type': 'municipality', 'isLocal': true},
+      {'name': 'La Unión', 'region': 'Nariño - Norte', 'type': 'municipality', 'isLocal': true},
     ];
   }
 
@@ -181,22 +103,26 @@ class CitySearchService {
         .replaceAll('ñ', 'n');
   }
 
-  /// Obtiene sugerencias basadas en el historial del usuario
+  /// Obtiene sugerencias para mostrar al usuario - SOLO MUNICIPIOS DE NARIÑO
   static List<Map<String, dynamic>> getSuggestionsForUser(List<String> recentSearches) {
     final suggestions = <Map<String, dynamic>>[];
     
-    // Agregar búsquedas recientes
-    for (final search in recentSearches.take(5)) {
-      final searchResults = searchCities(search);
-      if (searchResults.isNotEmpty) {
+    // Agregar búsquedas recientes (solo si son de Nariño)
+    for (final search in recentSearches.take(3)) {
+      if (NarinoDestinations.municipalities.contains(search)) {
+        final region = NarinoDestinations.getRegionForDestination(search);
         suggestions.add({
-          ...searchResults.first,
+          'name': search,
+          'region': 'Nariño - $region',
+          'type': 'municipality',
+          'priority': 0,
+          'isLocal': true,
           'isRecent': true,
         });
       }
     }
     
-    // Agregar TODOS los municipios de Nariño primero
+    // Agregar TODOS los municipios de Nariño
     for (final municipality in NarinoDestinations.municipalities) {
       if (!suggestions.any((s) => s['name'] == municipality)) {
         final region = NarinoDestinations.getRegionForDestination(municipality);
@@ -206,20 +132,6 @@ class CitySearchService {
           'type': 'municipality',
           'priority': 1,
           'isLocal': true,
-          'isRecent': false,
-        });
-      }
-    }
-    
-    // Agregar ciudades principales de Colombia
-    for (final city in colombianCities) {
-      if (!suggestions.any((s) => s['name'] == city['name'])) {
-        suggestions.add({
-          'name': city['name']!,
-          'region': city['region']!,
-          'type': city['type']!,
-          'priority': 2,
-          'isLocal': false,
           'isRecent': false,
         });
       }

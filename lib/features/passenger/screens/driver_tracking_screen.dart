@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:math';
+import '../../../services/route_tracing_service.dart';
 
 class DriverTrackingScreen extends StatefulWidget {
   final String tripId;
@@ -41,11 +43,16 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
   String _tripStatus = 'En camino';
   double _progress = 0.3;
   String _estimatedTime = '';
+  
+  // Nueva variable para almacenar la ruta real
+  List<LatLng> _routePoints = [];
+  int _currentRouteIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _initializeDriverLocation();
+    _loadRoute();
     _startLocationUpdates();
     _setupAnimations();
     _estimatedTime = widget.estimatedArrival;
@@ -58,6 +65,71 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
     final lng = widget.origin.longitude + 
         (widget.destination.longitude - widget.origin.longitude) * 0.3;
     _driverLocation = LatLng(lat, lng);
+  }
+
+  Future<void> _loadRoute() async {
+    try {
+      // Obtener nombres de ciudades desde las coordenadas
+      final originName = _getCityNameFromCoords(widget.origin);
+      final destinationName = _getCityNameFromCoords(widget.destination);
+      
+      if (originName != null && destinationName != null) {
+        _routePoints = await RouteTracingService.traceRoute(originName, destinationName);
+        
+        if (_routePoints.isNotEmpty) {
+          // Inicializar la posición del conductor en el 30% de la ruta
+          _currentRouteIndex = (_routePoints.length * 0.3).round();
+          if (_currentRouteIndex < _routePoints.length) {
+            _driverLocation = _routePoints[_currentRouteIndex];
+          }
+          setState(() {});
+        }
+      }
+    } catch (e) {
+      print('Error cargando ruta: $e');
+      // Fallback a la línea recta si hay error
+      _routePoints = [widget.origin, widget.destination];
+    }
+  }
+
+  String? _getCityNameFromCoords(LatLng coords) {
+    // Mapeo de coordenadas conocidas a nombres de ciudades
+    const cityCoords = {
+      'Pasto': LatLng(1.2136, -77.2811),
+      'Ipiales': LatLng(0.8317, -77.6439),
+      'Tumaco': LatLng(1.8014, -78.7642),
+      'Túquerres': LatLng(1.0864, -77.6175),
+      'Tangua': LatLng(1.0333, -77.7500),
+      'Popayán': LatLng(2.4448, -76.6147),
+    };
+    
+    // Encontrar la ciudad más cercana
+    String? closestCity;
+    double minDistance = double.infinity;
+    
+    for (final entry in cityCoords.entries) {
+      final distance = _calculateDistance(coords, entry.value);
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestCity = entry.key;
+      }
+    }
+    
+    return minDistance < 50 ? closestCity : null; // 50km de tolerancia
+  }
+
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    const double earthRadius = 6371; // Radio de la Tierra en km
+    final double lat1Rad = point1.latitude * (pi / 180);
+    final double lat2Rad = point2.latitude * (pi / 180);
+    final double deltaLatRad = (point2.latitude - point1.latitude) * (pi / 180);
+    final double deltaLngRad = (point2.longitude - point1.longitude) * (pi / 180);
+
+    final double a = sin(deltaLatRad / 2) * sin(deltaLatRad / 2) +
+        cos(lat1Rad) * cos(lat2Rad) * sin(deltaLngRad / 2) * sin(deltaLngRad / 2);
+    final double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+
+    return earthRadius * c;
   }
 
   void _setupAnimations() {
@@ -83,17 +155,32 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
 
   void _updateDriverLocation() {
     setState(() {
-      // Simular movimiento del conductor hacia el destino
-      final random = Random();
-      final progressIncrement = 0.02 + random.nextDouble() * 0.03;
-      _progress = (_progress + progressIncrement).clamp(0.0, 1.0);
-      
-      // Actualizar ubicación del conductor
-      final lat = widget.origin.latitude + 
-          (widget.destination.latitude - widget.origin.latitude) * _progress;
-      final lng = widget.origin.longitude + 
-          (widget.destination.longitude - widget.origin.longitude) * _progress;
-      _driverLocation = LatLng(lat, lng);
+      if (_routePoints.isNotEmpty) {
+        // Mover el conductor a lo largo de la ruta real
+        final random = Random();
+        final progressIncrement = 0.02 + random.nextDouble() * 0.03;
+        _progress = (_progress + progressIncrement).clamp(0.0, 1.0);
+        
+        // Calcular el índice en la ruta basado en el progreso
+        final targetIndex = (_progress * (_routePoints.length - 1)).round();
+        
+        if (targetIndex < _routePoints.length) {
+          _currentRouteIndex = targetIndex;
+          _driverLocation = _routePoints[_currentRouteIndex];
+        }
+      } else {
+        // Fallback al método anterior si no hay ruta cargada
+        final random = Random();
+        final progressIncrement = 0.02 + random.nextDouble() * 0.03;
+        _progress = (_progress + progressIncrement).clamp(0.0, 1.0);
+        
+        // Actualizar ubicación del conductor
+        final lat = widget.origin.latitude + 
+            (widget.destination.latitude - widget.origin.latitude) * _progress;
+        final lng = widget.origin.longitude + 
+            (widget.destination.longitude - widget.origin.longitude) * _progress;
+        _driverLocation = LatLng(lat, lng);
+      }
       
       // Actualizar estado del viaje
       if (_progress >= 0.95) {
@@ -305,11 +392,19 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
         // Línea de ruta
         PolylineLayer(
           polylines: [
-            Polyline(
-              points: [widget.origin, _driverLocation, widget.destination],
-              strokeWidth: 4.0,
-              color: Colors.indigo.withOpacity(0.7),
-            ),
+            if (_routePoints.isNotEmpty)
+              Polyline(
+                points: _routePoints,
+                strokeWidth: 4.0,
+                color: Colors.indigo.withOpacity(0.7),
+              )
+            else
+              // Fallback a línea recta si no hay ruta cargada
+              Polyline(
+                points: [widget.origin, _driverLocation, widget.destination],
+                strokeWidth: 4.0,
+                color: Colors.indigo.withOpacity(0.7),
+              ),
           ],
         ),
       ],

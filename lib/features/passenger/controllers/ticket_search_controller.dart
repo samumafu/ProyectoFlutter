@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../data/models/ticket_model.dart';
+import '../../../services/route_service.dart';
+import '../../../data/models/company_model.dart';
 import '../../../data/models/route_model.dart';
 
 class TicketSearchController extends ChangeNotifier {
@@ -303,14 +305,26 @@ class TicketSearchController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Simular llamada a API
-      await Future.delayed(const Duration(seconds: 1));
+      print('🎫 Buscando tickets:');
+      print('   Origen: $origin');
+      print('   Destino: $destination');
+      print('   Fecha: $departureDate');
+      print('   Pasajeros: $passengers');
 
-      // Filtrar por origen y destino
-      _filteredTickets = _allTickets.where((ticket) {
-        return ticket.origin.toLowerCase().contains(origin.toLowerCase()) &&
-               ticket.destination.toLowerCase().contains(destination.toLowerCase());
-      }).toList();
+      // Buscar rutas reales desde la base de datos
+      final routes = await RouteService.searchRoutes(
+        origin: origin,
+        destination: destination,
+        date: departureDate,
+      );
+
+      print('🚌 Rutas encontradas: ${routes.length}');
+
+      // Convertir CompanySchedule a Ticket
+      _filteredTickets = routes.map((route) => _convertScheduleToTicket(route)).toList();
+      _allTickets = List.from(_filteredTickets);
+
+      print('🎟️ Tickets generados: ${_filteredTickets.length}');
 
       // Aplicar filtros adicionales
       _applyFilters();
@@ -318,9 +332,48 @@ class TicketSearchController extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } catch (e) {
+      print('❌ Error al buscar tickets: $e');
       _error = 'Error al buscar tickets: $e';
       _isLoading = false;
       notifyListeners();
+    }
+  }
+
+  // Convertir CompanySchedule a Ticket
+  Ticket _convertScheduleToTicket(CompanySchedule schedule) {
+    return Ticket(
+      id: schedule.id,
+      routeId: schedule.id,
+      companyId: schedule.companyId,
+      origin: schedule.origin,
+      destination: schedule.destination,
+      departureTime: schedule.departureTime,
+      arrivalTime: schedule.arrivalTime,
+      price: schedule.price,
+      availableSeats: schedule.availableSeats,
+      totalSeats: schedule.totalSeats,
+      companyName: schedule.companyName ?? 'Empresa',
+      companyLogo: 'assets/logos/default.png',
+      busType: schedule.vehicleType,
+      amenities: ['Aire Acondicionado'],
+      rating: 4.0,
+      reviewCount: 0,
+      isDirectRoute: true,
+      duration: _calculateDuration(schedule.departureTime, schedule.arrivalTime),
+      stops: [],
+    );
+  }
+
+  // Calcular duración del viaje
+  String _calculateDuration(DateTime departure, DateTime arrival) {
+    final duration = arrival.difference(departure);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes % 60;
+    
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    } else {
+      return '${minutes}m';
     }
   }
 

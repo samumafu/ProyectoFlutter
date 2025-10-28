@@ -4,7 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../../../data/constants/narino_destinations.dart';
 import '../../../data/models/ticket_model.dart';
 import '../../../data/popular_routes_manager.dart';
-import '../../../widgets/city_search_widget.dart';
+import '../../../widgets/simple_city_selector.dart';
 import '../../../widgets/ai_recommendations_widget.dart';
 import '../../../services/city_search_service.dart';
 import '../../../services/user_preferences_service.dart';
@@ -152,17 +152,17 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: CitySearchWidget(
+                    child: SimpleCitySelector(
                       label: 'Origen',
-                      initialValue: _originController.text,
-                      recentSearches: _recentSearches,
-                      onCitySelected: (city) {
+                      initialValue: _origin,
+                      onCitySelected: (cityName) {
                         setState(() {
-                          _originController.text = city['name'];
-                          _origin = city['name'];
-                          // Aquí podrías obtener coordenadas si las tienes
+                          _originController.text = cityName;
+                          _origin = cityName;
+                          // Obtener coordenadas desde NarinoDestinations
+                          _originCoordinates = _getCoordinatesForCity(cityName);
                         });
-                        _addToRecentSearches(city['name']);
+                        _addToRecentSearches(cityName);
                       },
                     ),
                   ),
@@ -180,17 +180,17 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: CitySearchWidget(
+                    child: SimpleCitySelector(
                       label: 'Destino',
-                      initialValue: _destinationController.text,
-                      recentSearches: _recentSearches,
-                      onCitySelected: (city) {
+                      initialValue: _destination,
+                      onCitySelected: (cityName) {
                         setState(() {
-                          _destinationController.text = city['name'];
-                          _destination = city['name'];
-                          // Aquí podrías obtener coordenadas si las tienes
+                          _destinationController.text = cityName;
+                          _destination = cityName;
+                          // Obtener coordenadas desde NarinoDestinations
+                          _destinationCoordinates = _getCoordinatesForCity(cityName);
                         });
-                        _addToRecentSearches(city['name']);
+                        _addToRecentSearches(cityName);
                       },
                     ),
                   ),
@@ -524,15 +524,49 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
   }
 
   void _swapCities() {
-    final temp = _originController.text;
-    _originController.text = _destinationController.text;
-    _destinationController.text = temp;
+    setState(() {
+      final tempText = _originController.text;
+      final tempCity = _origin;
+      final tempCoordinates = _originCoordinates;
+      
+      _originController.text = _destinationController.text;
+      _destinationController.text = tempText;
+      
+      _origin = _destination;
+      _destination = tempCity;
+      
+      _originCoordinates = _destinationCoordinates;
+      _destinationCoordinates = tempCoordinates;
+    });
   }
 
   void _selectPopularRoute(String route) {
     final cities = route.split(' → ');
-    _originController.text = cities[0];
-    _destinationController.text = cities[1];
+    setState(() {
+      _originController.text = cities[0];
+      _destinationController.text = cities[1];
+      _origin = cities[0];
+      _destination = cities[1];
+      
+      // Obtener coordenadas para las ciudades seleccionadas
+      final originCity = CitySearchService.searchCities(cities[0]).firstWhere(
+        (city) => city['name'].toLowerCase() == cities[0].toLowerCase(),
+        orElse: () => <String, dynamic>{},
+      );
+      
+      final destinationCity = CitySearchService.searchCities(cities[1]).firstWhere(
+        (city) => city['name'].toLowerCase() == cities[1].toLowerCase(),
+        orElse: () => <String, dynamic>{},
+      );
+      
+      if (originCity.isNotEmpty && originCity.containsKey('latitude') && originCity.containsKey('longitude')) {
+        _originCoordinates = LatLng(originCity['latitude'], originCity['longitude']);
+      }
+      
+      if (destinationCity.isNotEmpty && destinationCity.containsKey('latitude') && destinationCity.containsKey('longitude')) {
+        _destinationCoordinates = LatLng(destinationCity['latitude'], destinationCity['longitude']);
+      }
+    });
   }
 
   void _openMapSelection(TextEditingController controller, String label) async {
@@ -557,40 +591,28 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
     }
   }
 
-  void _searchTickets() {
-    if (_originController.text.isEmpty || _destinationController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor selecciona origen y destino'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    if (_departureDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor selecciona la fecha de salida'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
+  void _searchTickets() async {
+    print('🔥🔥🔥 _searchTickets MÉTODO EJECUTÁNDOSE');
+    print('🔥🔥🔥 Origen: "${_originController.text}"');
+    print('🔥🔥🔥 Destino: "${_destinationController.text}"');
+    print('🔥🔥🔥 Fecha: $_departureDate');
+    
+    // NAVEGACIÓN DIRECTA SIN VALIDACIONES PARA TESTING
+    print('🔥🔥🔥 Navegando DIRECTAMENTE a TicketResultsScreen...');
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => TicketResultsScreen(
-          origin: _originController.text,
-          destination: _destinationController.text,
-          departureDate: _departureDate!,
-          passengers: _passengers,
-          isRoundTrip: _isRoundTrip,
-          returnDate: _returnDate,
+          origin: _originController.text.isEmpty ? "Test" : _originController.text,
+          destination: _destinationController.text.isEmpty ? "Test" : _destinationController.text,
+          departureDate: _departureDate ?? DateTime.now(),
+          passengers: 1,
+          isRoundTrip: false,
+          returnDate: null,
         ),
       ),
     );
+    print('🔥🔥🔥 Navegación completada');
   }
 
   bool _canShowRoute() {
@@ -651,6 +673,29 @@ class _TicketSearchScreenState extends State<TicketSearchScreen> {
     } catch (e) {
       print('Error saving recent search: $e');
     }
+  }
+
+  LatLng? _getCoordinatesForCity(String cityName) {
+    // Coordenadas básicas para algunos municipios principales
+    final coordinates = {
+      'Pasto': const LatLng(1.2136, -77.2811),
+      'Ipiales': const LatLng(0.8317, -77.6439),
+      'Tumaco': const LatLng(1.8014, -78.7642),
+      'Túquerres': const LatLng(1.0864, -77.6175),
+      'Barbacoas': const LatLng(1.6667, -78.1500),
+      'La Unión': const LatLng(1.6000, -77.1333),
+      'Samaniego': const LatLng(1.3333, -77.5833),
+      'Sandoná': const LatLng(1.2833, -77.4667),
+      'Consacá': const LatLng(1.2167, -77.5167),
+      'Yacuanquer': const LatLng(1.1333, -77.4167),
+      'Tangua': const LatLng(1.0333, -77.7500),
+      'Funes': const LatLng(1.0167, -77.7167),
+      'Guachucal': const LatLng(0.9833, -77.7667),
+      'Cumbal': const LatLng(0.9167, -77.8000),
+      'Ricaurte': const LatLng(1.2167, -78.1833),
+    };
+    
+    return coordinates[cityName];
   }
 
   @override
