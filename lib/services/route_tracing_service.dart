@@ -166,23 +166,27 @@ class RouteTracingService {
     throw Exception('OSRM API falló con status ${response.statusCode}');
   }
 
-  /// Obtiene ruta usando OpenRouteService API (gratuita)
+  /// Obtiene ruta usando OpenRouteService API con máxima precisión
   static Future<List<LatLng>> _getOpenRouteServiceRoute(LatLng start, LatLng end) async {
-    final url = Uri.parse('https://api.openrouteservice.org/v2/directions/driving-car?start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}');
+    // Usar parámetros para máxima precisión en carreteras
+    final url = Uri.parse('https://api.openrouteservice.org/v2/directions/driving-car?start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}&format=geojson&geometry_simplify=false&continue_straight=false&instructions=true');
     
-    print('Consultando OpenRouteService API: $url');
+    print('🗺️ Consultando OpenRouteService API para ruta precisa: $url');
     
     final response = await http.get(
       url,
       headers: {
         'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
+        'Content-Type': 'application/json; charset=utf-8'
       },
     ).timeout(
-      const Duration(seconds: 15),
+      const Duration(seconds: 25),
       onTimeout: () {
         throw Exception('Timeout en OpenRouteService API');
       },
     );
+    
+    print('📡 Respuesta OpenRouteService - Status: ${response.statusCode}');
     
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -192,13 +196,13 @@ class RouteTracingService {
         if (feature['geometry'] != null && feature['geometry']['coordinates'] != null) {
           final coordinates = feature['geometry']['coordinates'] as List;
           
-          print('Coordenadas OpenRouteService encontradas: ${coordinates.length} puntos');
+          print('✅ Ruta OpenRouteService PRECISA obtenida con ${coordinates.length} puntos de carretera real');
           
           final routePoints = coordinates.map<LatLng>((coord) {
             return LatLng(coord[1].toDouble(), coord[0].toDouble());
           }).toList();
           
-          return _optimizeRoute(routePoints);
+          return _optimizeRouteForRealRoads(routePoints);
         }
       }
     }
@@ -206,23 +210,24 @@ class RouteTracingService {
     throw Exception('OpenRouteService API falló');
   }
 
-  /// Obtiene ruta usando Mapbox API (requiere token pero tiene versión gratuita)
+  /// Obtiene ruta usando Mapbox API con máxima precisión (requiere token pero tiene versión gratuita)
   static Future<List<LatLng>> _getMapboxRoute(LatLng start, LatLng end) async {
     // Token público de Mapbox para desarrollo (reemplazar con tu propio token en producción)
     const mapboxToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw';
     
-    final url = Uri.parse('https://api.mapbox.com/directions/v5/mapbox/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&steps=true&access_token=$mapboxToken');
+    // Usar parámetros para máxima precisión y detalle de carreteras
+    final url = Uri.parse('https://api.mapbox.com/directions/v5/mapbox/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&steps=true&continue_straight=false&overview=full&annotations=maxspeed,duration,distance&access_token=$mapboxToken');
     
-    print('Consultando Mapbox Directions API: $url');
+    print('🗺️ Consultando Mapbox Directions API para ruta precisa: $url');
     
     final response = await http.get(url).timeout(
-      const Duration(seconds: 20),
+      const Duration(seconds: 25),
       onTimeout: () {
         throw Exception('Timeout en Mapbox API');
       },
     );
     
-    print('Respuesta Mapbox - Status: ${response.statusCode}');
+    print('📡 Respuesta Mapbox - Status: ${response.statusCode}');
     
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
@@ -232,7 +237,7 @@ class RouteTracingService {
         if (route['geometry'] != null && route['geometry']['coordinates'] != null) {
           final coordinates = route['geometry']['coordinates'] as List;
           
-          print('Ruta Mapbox obtenida con ${coordinates.length} puntos');
+          print('✅ Ruta Mapbox PRECISA obtenida con ${coordinates.length} puntos de carretera real');
           
           final routePoints = coordinates.map<LatLng>((coord) {
             return LatLng(coord[1].toDouble(), coord[0].toDouble());
@@ -312,7 +317,50 @@ class RouteTracingService {
     return optimized;
   }
 
-  /// Determina si un punto es significativo en la ruta
+  /// Optimiza rutas reales manteniendo más puntos para precisión
+  static List<LatLng> _optimizeRouteForRealRoads(List<LatLng> route) {
+    if (route.length <= 100) return route;
+    
+    List<LatLng> optimized = [route.first];
+    
+    // Usar tolerancia más baja para mantener precisión de carreteras reales
+    double tolerance = 0.0005; // ~50m de tolerancia para carreteras reales
+    
+    for (int i = 1; i < route.length - 1; i++) {
+      final prev = optimized.last;
+      final current = route[i];
+      final next = route[i + 1];
+      
+      // Calcular si el punto actual es significativo
+      if (_isSignificantPoint(prev, current, next, tolerance)) {
+        optimized.add(current);
+      }
+    }
+    
+    optimized.add(route.last);
+    print('🛣️ Ruta optimizada para carreteras reales: ${route.length} -> ${optimized.length} puntos');
+    return optimized;
+  }
+
+  /// Determina si un punto es significativo para carreteras reales (más estricto)
+  static bool _isSignificantPointForRealRoads(LatLng prev, LatLng current, LatLng next, double tolerance) {
+    // Calcular la distancia perpendicular del punto actual a la línea prev-next
+    final A = next.latitude - prev.latitude;
+    final B = prev.longitude - next.longitude;
+    final C = next.longitude * prev.latitude - prev.longitude * next.latitude;
+    
+    final distance = (A * current.longitude + B * current.latitude + C).abs() / 
+                    sqrt(A * A + B * B);
+    
+    // Para carreteras reales, ser más estricto con curvas y cambios de dirección
+    final distanceToPrev = _distance.as(LengthUnit.Meter, prev, current);
+    final distanceToNext = _distance.as(LengthUnit.Meter, current, next);
+    
+    // Mantener puntos que representen curvas importantes o cambios significativos
+    return distance > tolerance || 
+           distanceToPrev > 200 || // Mantener puntos cada 200m mínimo
+           distanceToNext > 200;
+  }
   static bool _isSignificantPoint(LatLng prev, LatLng current, LatLng next, double tolerance) {
     // Calcular la distancia perpendicular del punto actual a la línea prev-next
     final distance = _perpendicularDistance(current, prev, next);

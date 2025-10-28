@@ -213,6 +213,13 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
   Widget _buildRouteLayer() {
     return PolylineLayer(
       polylines: [
+        // Ruta principal con mejor visualización para carreteras reales
+        Polyline(
+          points: _routePoints,
+          strokeWidth: 6.0,
+          color: Colors.indigo.withOpacity(0.8),
+        ),
+        // Borde de la ruta para mejor definición
         Polyline(
           points: _routePoints,
           strokeWidth: 4.0,
