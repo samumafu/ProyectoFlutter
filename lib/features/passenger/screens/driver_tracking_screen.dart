@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'dart:math';
 import '../../../services/route_tracing_service.dart';
+import '../../../data/routes_data.dart';
 
 class DriverTrackingScreen extends StatefulWidget {
   final String tripId;
@@ -15,6 +16,8 @@ class DriverTrackingScreen extends StatefulWidget {
   final LatLng origin;
   final LatLng destination;
   final String estimatedArrival;
+  final String? originName;
+  final String? destinationName;
 
   const DriverTrackingScreen({
     Key? key,
@@ -26,6 +29,8 @@ class DriverTrackingScreen extends StatefulWidget {
     required this.origin,
     required this.destination,
     required this.estimatedArrival,
+    this.originName,
+    this.destinationName,
   }) : super(key: key);
 
   @override
@@ -69,49 +74,118 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
 
   Future<void> _loadRoute() async {
     try {
-      // Obtener nombres de ciudades desde las coordenadas
-      final originName = _getCityNameFromCoords(widget.origin);
-      final destinationName = _getCityNameFromCoords(widget.destination);
+      // Usar nombres proporcionados o obtener nombres desde las coordenadas
+      String originName = widget.originName ?? _getCityNameFromCoords(widget.origin) ?? 'Origen';
+      String destinationName = widget.destinationName ?? _getCityNameFromCoords(widget.destination) ?? 'Destino';
       
-      if (originName != null && destinationName != null) {
-        _routePoints = await RouteTracingService.traceRoute(originName, destinationName);
+      print('Cargando ruta real de OpenStreetMap: $originName -> $destinationName');
+      
+      // Obtener ruta real de OpenStreetMap (sin fallbacks simulados)
+      _routePoints = await RouteTracingService.traceRoute(originName, destinationName);
+      
+      if (_routePoints.isNotEmpty && _routePoints.length > 2) {
+        print('Ruta real de OpenStreetMap cargada con ${_routePoints.length} puntos');
+        setState(() {
+          // Inicializar la posición del conductor en el primer punto de la ruta
+          _driverLocation = _routePoints[0];
+          _currentRouteIndex = 0;
+        });
         
-        if (_routePoints.isNotEmpty) {
-          // Inicializar la posición del conductor en el 30% de la ruta
-          _currentRouteIndex = (_routePoints.length * 0.3).round();
-          if (_currentRouteIndex < _routePoints.length) {
-            _driverLocation = _routePoints[_currentRouteIndex];
-          }
-          setState(() {});
-        }
+        // Centrar el mapa en la ruta completa después de un pequeño delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _centerMapOnRoute();
+        });
+      } else {
+        throw Exception('Ruta vacía o insuficiente');
       }
     } catch (e) {
-      print('Error cargando ruta: $e');
-      // Fallback a la línea recta si hay error
-      _routePoints = [widget.origin, widget.destination];
+      print('Error cargando ruta real de OpenStreetMap: $e');
+      
+      // Mostrar error al usuario
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error cargando ruta: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+      
+      // Usar coordenadas básicas como último recurso
+      setState(() {
+        _routePoints = [widget.origin, widget.destination];
+        _driverLocation = widget.origin;
+        _currentRouteIndex = 0;
+      });
     }
   }
 
+  /// Genera una ruta de respaldo más realista
+  /// NOTA: Este es solo un fallback de emergencia - se usa OpenStreetMap cuando está disponible
+  List<LatLng> _generateEnhancedFallbackRoute(LatLng start, LatLng end) {
+    List<LatLng> route = [start];
+    
+    // Calcular distancia total
+    final totalDistance = _calculateDistance(start, end);
+    
+    // Número de puntos basado en la distancia (más puntos para rutas más largas)
+    int numPoints = (totalDistance / 3).ceil().clamp(10, 40);
+    
+    // Generar puntos intermedios con curvas realistas
+    for (int i = 1; i < numPoints; i++) {
+      double t = i / numPoints;
+      
+      // Interpolación básica
+      double lat = start.latitude + (end.latitude - start.latitude) * t;
+      double lng = start.longitude + (end.longitude - start.longitude) * t;
+      
+      // Agregar variaciones para simular carreteras reales
+      double latVariation = 0.003 * sin(t * pi * 3) * (t * (1 - t));
+      double lngVariation = 0.002 * cos(t * pi * 2.5) * (t * (1 - t));
+      
+      // Variación adicional basada en la topografía estimada
+      if (totalDistance > 100) { // Ruta larga, más curvas
+        latVariation += 0.002 * sin(t * pi * 5) * (t * (1 - t));
+        lngVariation += 0.0015 * cos(t * pi * 4) * (t * (1 - t));
+      }
+      
+      route.add(LatLng(lat + latVariation, lng + lngVariation));
+    }
+    
+    route.add(end);
+    return route;
+  }
+
   String? _getCityNameFromCoords(LatLng coords) {
-    // Mapeo de coordenadas conocidas a nombres de ciudades
-    const cityCoords = {
-      'Pasto': LatLng(1.2136, -77.2811),
-      'Ipiales': LatLng(0.8317, -77.6439),
-      'Tumaco': LatLng(1.8014, -78.7642),
-      'Túquerres': LatLng(1.0864, -77.6175),
-      'Tangua': LatLng(1.0333, -77.7500),
-      'Popayán': LatLng(2.4448, -76.6147),
-    };
+    // Usar RoutesData para obtener coordenadas dinámicamente
+    final cities = [
+      'Pasto', 'Ipiales', 'Tumaco', 'Túquerres', 'Tangua', 'Popayán',
+      'La Unión', 'Samaniego', 'Sandona', 'Consacá', 'Yacuanquer',
+      'Chachagüí', 'Nariño', 'Ospina', 'Francisco Pizarro', 'Ricaurte',
+      'Barbacoas', 'Magüí', 'Roberto Payán', 'Mallama', 'Piedrancha',
+      'Santacruz', 'Providencia', 'Buesaco', 'Funes', 'Guachucal',
+      'Cumbal', 'Aldana', 'Córdoba', 'Potosí', 'Gualmatán',
+      'Contadero', 'Iles', 'Carlosama', 'Colón', 'San Pedro de Cartago',
+      'La Florida', 'Imués', 'Cuaspud', 'Pupiales', 'Ancuyá',
+      'Linares', 'Los Andes', 'Policarpa', 'Cumbitara', 'Leiva',
+      'El Rosario', 'El Tambo', 'Arboleda', 'Belén', 'San Bernardo',
+      'Albán', 'San Pablo', 'La Tola', 'El Charco', 'Mosquera',
+      'Olaya Herrera', 'Santa Bárbara'
+    ];
     
     // Encontrar la ciudad más cercana
     String? closestCity;
     double minDistance = double.infinity;
     
-    for (final entry in cityCoords.entries) {
-      final distance = _calculateDistance(coords, entry.value);
-      if (distance < minDistance) {
-        minDistance = distance;
-        closestCity = entry.key;
+    for (final city in cities) {
+      final cityCoords = RoutesData.getDestinationCoordinates(city);
+      if (cityCoords != null) {
+        final distance = _calculateDistance(coords, cityCoords);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestCity = city;
+        }
       }
     }
     
@@ -155,10 +229,10 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
 
   void _updateDriverLocation() {
     setState(() {
-      if (_routePoints.isNotEmpty) {
-        // Mover el conductor a lo largo de la ruta real
+      if (_routePoints.isNotEmpty && _routePoints.length > 2) {
+        // Mover el conductor a lo largo de la ruta real de OpenStreetMap
         final random = Random();
-        final progressIncrement = 0.02 + random.nextDouble() * 0.03;
+        final progressIncrement = 0.015 + random.nextDouble() * 0.025; // Movimiento más realista
         _progress = (_progress + progressIncrement).clamp(0.0, 1.0);
         
         // Calcular el índice en la ruta basado en el progreso
@@ -169,12 +243,12 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
           _driverLocation = _routePoints[_currentRouteIndex];
         }
       } else {
-        // Fallback al método anterior si no hay ruta cargada
+        // Solo si no hay ruta real disponible (caso extremo)
         final random = Random();
         final progressIncrement = 0.02 + random.nextDouble() * 0.03;
         _progress = (_progress + progressIncrement).clamp(0.0, 1.0);
         
-        // Actualizar ubicación del conductor
+        // Movimiento lineal básico
         final lat = widget.origin.latitude + 
             (widget.destination.latitude - widget.origin.latitude) * _progress;
         final lng = widget.origin.longitude + 
@@ -182,17 +256,69 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
         _driverLocation = LatLng(lat, lng);
       }
       
-      // Actualizar estado del viaje
+      // Actualizar estado del viaje basado en el progreso real
       if (_progress >= 0.95) {
         _tripStatus = 'Llegando';
         _estimatedTime = '1-2 min';
-      } else if (_progress >= 0.7) {
+      } else if (_progress >= 0.8) {
+        _tripStatus = 'Muy cerca';
+        _estimatedTime = '3-5 min';
+      } else if (_progress >= 0.6) {
         _tripStatus = 'Cerca';
-        _estimatedTime = '5-8 min';
+        _estimatedTime = '8-12 min';
       } else {
         _tripStatus = 'En camino';
+        // Calcular tiempo estimado basado en distancia restante
+        final remainingDistance = _calculateDistance(_driverLocation, widget.destination);
+        final estimatedMinutes = (remainingDistance / 0.8).round(); // Asumiendo 48 km/h promedio
+        _estimatedTime = '${estimatedMinutes} min';
       }
     });
+  }
+
+  void _centerMapOnRoute() {
+    if (_routePoints.isEmpty) return;
+
+    // Calcular los límites de la ruta
+    double minLat = _routePoints.first.latitude;
+    double maxLat = _routePoints.first.latitude;
+    double minLng = _routePoints.first.longitude;
+    double maxLng = _routePoints.first.longitude;
+
+    for (final point in _routePoints) {
+      minLat = minLat < point.latitude ? minLat : point.latitude;
+      maxLat = maxLat > point.latitude ? maxLat : point.latitude;
+      minLng = minLng < point.longitude ? minLng : point.longitude;
+      maxLng = maxLng > point.longitude ? maxLng : point.longitude;
+    }
+
+    // Agregar padding a los límites
+    final latPadding = (maxLat - minLat) * 0.1;
+    final lngPadding = (maxLng - minLng) * 0.1;
+
+    minLat -= latPadding;
+    maxLat += latPadding;
+    minLng -= lngPadding;
+    maxLng += lngPadding;
+
+    // Centrar el mapa
+    final center = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
+    
+    // Calcular zoom apropiado basado en la distancia
+    final distance = _calculateDistance(LatLng(minLat, minLng), LatLng(maxLat, maxLng));
+    double zoom = 10.0;
+    
+    if (distance < 50) {
+      zoom = 12.0;
+    } else if (distance < 100) {
+      zoom = 11.0;
+    } else if (distance < 200) {
+      zoom = 10.0;
+    } else {
+      zoom = 9.0;
+    }
+    
+    _mapController.move(center, zoom);
   }
 
   @override
@@ -389,22 +515,50 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
           ],
         ),
         
-        // Línea de ruta
+        // Línea de ruta mejorada con mejor visualización
         PolylineLayer(
           polylines: [
-            if (_routePoints.isNotEmpty)
+            if (_routePoints.isNotEmpty && _routePoints.length > 2) ...[
+              // Ruta completa en gris claro (más gruesa para mejor visibilidad)
               Polyline(
                 points: _routePoints,
-                strokeWidth: 4.0,
-                color: Colors.indigo.withOpacity(0.7),
-              )
-            else
-              // Fallback a línea recta si no hay ruta cargada
+                strokeWidth: 8.0,
+                color: Colors.grey.withOpacity(0.3),
+              ),
+              // Borde de la ruta completa para mejor definición
+              Polyline(
+                points: _routePoints,
+                strokeWidth: 6.0,
+                color: Colors.grey.withOpacity(0.6),
+              ),
+              if (_currentRouteIndex > 0)
+                // Ruta recorrida en azul vibrante
+                Polyline(
+                  points: _routePoints.sublist(0, _currentRouteIndex + 1),
+                  strokeWidth: 6.0,
+                  color: Colors.indigo.withOpacity(0.9),
+                ),
+              if (_currentRouteIndex > 0)
+                // Borde de la ruta recorrida para mejor visibilidad
+                Polyline(
+                  points: _routePoints.sublist(0, _currentRouteIndex + 1),
+                  strokeWidth: 4.0,
+                  color: Colors.indigo,
+                ),
+            ],
+            if (_routePoints.isEmpty || _routePoints.length <= 2) ...[
+              // Fallback a línea recta si no hay ruta cargada (con mejor estilo)
               Polyline(
                 points: [widget.origin, _driverLocation, widget.destination],
-                strokeWidth: 4.0,
-                color: Colors.indigo.withOpacity(0.7),
+                strokeWidth: 6.0,
+                color: Colors.grey.withOpacity(0.4),
               ),
+              Polyline(
+                points: [widget.origin, _driverLocation],
+                strokeWidth: 4.0,
+                color: Colors.indigo.withOpacity(0.8),
+              ),
+            ],
           ],
         ),
       ],

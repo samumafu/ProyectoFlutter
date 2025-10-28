@@ -3,6 +3,9 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import '../../../data/models/ticket_model.dart';
 import '../../../data/popular_routes_manager.dart';
+import '../../../data/routes_data.dart';
+import '../../../models/booking.dart' as booking_model;
+import '../../../services/booking_service.dart';
 import 'seat_selection_screen.dart';
 import 'chat_screen.dart';
 import 'driver_tracking_screen.dart';
@@ -752,11 +755,40 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
-  void _confirmBooking(List<int> selectedSeats, double totalPrice) {
-    // Registrar la reserva en el sistema de rutas populares
-    PopularRoutesManager.recordBooking(widget.ticket.origin, widget.ticket.destination);
-    
-    _showBookingSuccess();
+  void _confirmBooking(List<int> selectedSeats, double totalPrice) async {
+    try {
+      // Crear la reserva
+      final booking = booking_model.Booking(
+        id: BookingService.generateBookingId(),
+        origin: widget.ticket.origin,
+        destination: widget.ticket.destination,
+        departureDate: widget.ticket.departureTime,
+        departureTime: widget.ticket.departureTimeFormatted,
+        selectedSeats: selectedSeats.map((seat) => seat.toString()).toList(),
+        totalPrice: totalPrice,
+        pickupPointName: 'Terminal Principal',
+        pickupPointDescription: 'Terminal de ${widget.ticket.origin}',
+        pickupPointCoordinates: const LatLng(1.2136, -77.2811), // Coordenadas por defecto
+        bookingDate: DateTime.now(),
+        status: booking_model.BookingStatus.confirmed,
+      );
+
+      // Guardar la reserva en el historial
+      await BookingService.saveBooking(booking);
+      
+      // Registrar la reserva en el sistema de rutas populares
+      PopularRoutesManager.recordBooking(widget.ticket.origin, widget.ticket.destination);
+      
+      _showBookingSuccess();
+    } catch (e) {
+      // Mostrar error si no se puede guardar la reserva
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar la reserva: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _showBookingSuccess() {
@@ -800,9 +832,13 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   void _openDriverTracking() {
-    // Coordenadas simuladas para origen y destino
-    final originCoords = LatLng(1.2136, -77.2811); // Pasto
-    final destinationCoords = LatLng(2.4448, -76.6147); // Popayán
+    // Usar las coordenadas reales del ticket seleccionado
+    final originCoords = RoutesData.getDestinationCoordinates(widget.ticket.origin);
+    final destinationCoords = RoutesData.getDestinationCoordinates(widget.ticket.destination);
+    
+    // Fallback a coordenadas por defecto si no se encuentran
+    final defaultOrigin = originCoords ?? LatLng(1.2136, -77.2811); // Pasto
+    final defaultDestination = destinationCoords ?? LatLng(2.4448, -76.6147); // Popayán
     
     Navigator.push(
       context,
@@ -812,10 +848,12 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           driverName: 'Carlos Rodríguez',
           driverPhone: '+57 300 123 4567',
           vehiclePlate: 'ABC-123',
-          vehicleModel: 'Mercedes Sprinter',
-          origin: originCoords,
-          destination: destinationCoords,
-          estimatedArrival: '15-20 min',
+          vehicleModel: 'Toyota Hiace 2020',
+          origin: originCoords ?? defaultOrigin,
+          destination: destinationCoords ?? defaultDestination,
+          originName: widget.ticket.origin,
+          destinationName: widget.ticket.destination,
+          estimatedArrival: '25 min',
         ),
       ),
     );

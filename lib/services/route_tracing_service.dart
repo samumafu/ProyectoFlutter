@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:math' as Math;
+import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -77,76 +77,175 @@ class RouteTracingService {
     }
 
     try {
-      // Intentar obtener ruta real usando OSRM API
+      // PRIORIDAD 1: Intentar obtener ruta real de APIs de mapas
       final realRoute = await _getRealRoute(originCoords, destinationCoords);
       if (realRoute.isNotEmpty) {
         // Guardar en cache para uso futuro
         await _saveRouteToCache(cacheKey, realRoute);
-        print('Ruta real obtenida de OSRM API y guardada en cache: $origin -> $destination');
+        print('✅ Ruta REAL obtenida de API de mapas: $origin -> $destination (${realRoute.length} puntos)');
         return realRoute;
       }
     } catch (e) {
-      print('Error obteniendo ruta real: $e');
+      print('❌ Error obteniendo ruta real de APIs: $e');
     }
 
-    // Fallback: usar el método anterior si la API falla
+    // PRIORIDAD 2: Usar método de respaldo con paradas intermedias reales
+    print('🔄 Usando método de respaldo con paradas intermedias...');
     final fallbackRoute = _getFallbackRoute(origin, destination, originCoords, destinationCoords);
     if (fallbackRoute.isNotEmpty) {
       // También guardar el fallback en cache
       await _saveRouteToCache(cacheKey, fallbackRoute);
-      print('Ruta fallback generada y guardada en cache: $origin -> $destination');
+      print('⚠️ Ruta de respaldo generada: $origin -> $destination (${fallbackRoute.length} puntos)');
     }
     return fallbackRoute;
   }
 
-  /// Obtiene una ruta real usando OSRM API (gratuita, sin API key)
+  /// Obtiene una ruta real usando OpenStreetMap routing APIs
   static Future<List<LatLng>> _getRealRoute(LatLng start, LatLng end) async {
-    try {
-      // Usar OSRM API que es completamente gratuita y no requiere API key
-      final url = Uri.parse('https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true');
-      
-      print('Consultando OSRM API: $url');
-      
-      final response = await http.get(url).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('Timeout en OSRM API');
-        },
-      );
-      
-      print('Respuesta OSRM - Status: ${response.statusCode}');
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        
-        if (data['routes'] != null && data['routes'].isNotEmpty) {
-          final route = data['routes'][0];
-          if (route['geometry'] != null && route['geometry']['coordinates'] != null) {
-            final coordinates = route['geometry']['coordinates'] as List;
-            
-            print('Coordenadas encontradas: ${coordinates.length} puntos');
-            
-            final routePoints = coordinates.map<LatLng>((coord) {
-              return LatLng(coord[1].toDouble(), coord[0].toDouble());
-            }).toList();
-            
-            // Optimizar la ruta para mejor rendimiento (reducir puntos si hay demasiados)
-            final optimizedRoute = _optimizeRoute(routePoints);
-            
-            print('Ruta real obtenida con ${optimizedRoute.length} puntos optimizados');
-            return optimizedRoute;
-          }
+    // Usar exclusivamente APIs basadas en OpenStreetMap
+    final osmRoutingServices = [
+      () => _getOSRMRoute(start, end),
+      () => _getMapboxRoute(start, end),
+      () => _getOpenRouteServiceRoute(start, end),
+    ];
+    
+    for (final service in osmRoutingServices) {
+      try {
+        final route = await service();
+        if (route.isNotEmpty && route.length > 2) {
+          print('Ruta real obtenida con ${route.length} puntos');
+          return route;
         }
-      } else {
-        print('Error en respuesta OSRM: ${response.body}');
+      } catch (e) {
+        print('Error en servicio routing: $e');
+        continue;
       }
-    } catch (e) {
-      print('Error en API de rutas OSRM: $e');
-      // Intentar con servidor alternativo de OSRM
-      return await _getRealRouteAlternative(start, end);
     }
     
-    return [];
+    // Si todos los servicios fallan, usar el método de respaldo con paradas intermedias
+    print('APIs de routing no disponibles, usando método de respaldo con paradas intermedias');
+    throw Exception('No se pudo obtener ruta real de ningún servicio');
+  }
+
+  /// Obtiene ruta usando OSRM API
+  static Future<List<LatLng>> _getOSRMRoute(LatLng start, LatLng end) async {
+    final url = Uri.parse('https://router.project-osrm.org/route/v1/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?overview=full&geometries=geojson&steps=true&alternatives=false');
+    
+    print('Consultando OSRM API: $url');
+    
+    final response = await http.get(url).timeout(
+      const Duration(seconds: 20),
+      onTimeout: () {
+        throw Exception('Timeout en OSRM API');
+      },
+    );
+    
+    print('Respuesta OSRM - Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      
+      if (data['routes'] != null && data['routes'].isNotEmpty) {
+        final route = data['routes'][0];
+        if (route['geometry'] != null && route['geometry']['coordinates'] != null) {
+          final coordinates = route['geometry']['coordinates'] as List;
+          
+          print('Ruta OSRM obtenida con ${coordinates.length} puntos');
+          
+          final routePoints = coordinates.map<LatLng>((coord) {
+            return LatLng(coord[1].toDouble(), coord[0].toDouble());
+          }).toList();
+          
+          return _optimizeRoute(routePoints);
+        }
+      }
+    } else {
+      print('Error OSRM: ${response.statusCode} - ${response.body}');
+    }
+    
+    throw Exception('OSRM API falló con status ${response.statusCode}');
+  }
+
+  /// Obtiene ruta usando OpenRouteService API (gratuita)
+  static Future<List<LatLng>> _getOpenRouteServiceRoute(LatLng start, LatLng end) async {
+    final url = Uri.parse('https://api.openrouteservice.org/v2/directions/driving-car?start=${start.longitude},${start.latitude}&end=${end.longitude},${end.latitude}');
+    
+    print('Consultando OpenRouteService API: $url');
+    
+    final response = await http.get(
+      url,
+      headers: {
+        'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8',
+      },
+    ).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        throw Exception('Timeout en OpenRouteService API');
+      },
+    );
+    
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      
+      if (data['features'] != null && data['features'].isNotEmpty) {
+        final feature = data['features'][0];
+        if (feature['geometry'] != null && feature['geometry']['coordinates'] != null) {
+          final coordinates = feature['geometry']['coordinates'] as List;
+          
+          print('Coordenadas OpenRouteService encontradas: ${coordinates.length} puntos');
+          
+          final routePoints = coordinates.map<LatLng>((coord) {
+            return LatLng(coord[1].toDouble(), coord[0].toDouble());
+          }).toList();
+          
+          return _optimizeRoute(routePoints);
+        }
+      }
+    }
+    
+    throw Exception('OpenRouteService API falló');
+  }
+
+  /// Obtiene ruta usando Mapbox API (requiere token pero tiene versión gratuita)
+  static Future<List<LatLng>> _getMapboxRoute(LatLng start, LatLng end) async {
+    // Token público de Mapbox para desarrollo (reemplazar con tu propio token en producción)
+    const mapboxToken = 'pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw';
+    
+    final url = Uri.parse('https://api.mapbox.com/directions/v5/mapbox/driving/${start.longitude},${start.latitude};${end.longitude},${end.latitude}?geometries=geojson&steps=true&access_token=$mapboxToken');
+    
+    print('Consultando Mapbox Directions API: $url');
+    
+    final response = await http.get(url).timeout(
+      const Duration(seconds: 20),
+      onTimeout: () {
+        throw Exception('Timeout en Mapbox API');
+      },
+    );
+    
+    print('Respuesta Mapbox - Status: ${response.statusCode}');
+    
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      
+      if (data['routes'] != null && data['routes'].isNotEmpty) {
+        final route = data['routes'][0];
+        if (route['geometry'] != null && route['geometry']['coordinates'] != null) {
+          final coordinates = route['geometry']['coordinates'] as List;
+          
+          print('Ruta Mapbox obtenida con ${coordinates.length} puntos');
+          
+          final routePoints = coordinates.map<LatLng>((coord) {
+            return LatLng(coord[1].toDouble(), coord[0].toDouble());
+          }).toList();
+          
+          return _optimizeRoute(routePoints);
+        }
+      }
+    } else {
+      print('Error Mapbox: ${response.statusCode} - ${response.body}');
+    }
+    
+    throw Exception('Mapbox API falló con status ${response.statusCode}');
   }
 
   /// Servidor alternativo de OSRM en caso de que el principal falle
@@ -276,38 +375,145 @@ class RouteTracingService {
     return routePoints;
   }
 
-  /// Crea una ruta más realista entre dos puntos simulando carreteras principales de Nariño
+  /// Genera una ruta realista de emergencia cuando los servicios OSM no están disponibles
+  static List<LatLng> _generateRealisticEmergencyRoute(LatLng start, LatLng end) {
+    List<LatLng> route = [start];
+    
+    // Calcular distancia total
+    final distance = _distance.as(LengthUnit.Kilometer, start, end);
+    
+    // Número de puntos basado en la distancia (más puntos para rutas más largas)
+    int numPoints = (distance / 2).ceil().clamp(15, 60); // Un punto cada 2km aproximadamente
+    
+    // Generar puntos intermedios con curvas realistas que simulan carreteras
+    for (int i = 1; i < numPoints; i++) {
+      double t = i / numPoints;
+      
+      // Interpolación básica
+      double lat = start.latitude + (end.latitude - start.latitude) * t;
+      double lng = start.longitude + (end.longitude - start.longitude) * t;
+      
+      // Agregar variaciones para simular carreteras reales de Colombia
+      // Variación principal basada en topografía montañosa típica de Nariño
+      double latVariation = 0.004 * sin(t * pi * 3.5) * (t * (1 - t)) * 2;
+      double lngVariation = 0.003 * cos(t * pi * 2.8) * (t * (1 - t)) * 2;
+      
+      // Variación secundaria para curvas más naturales
+      if (distance > 50) { // Ruta larga, más curvas
+        latVariation += 0.002 * sin(t * pi * 6) * (t * (1 - t));
+        lngVariation += 0.0015 * cos(t * pi * 5) * (t * (1 - t));
+      }
+      
+      // Variación terciaria para evitar líneas rectas
+      latVariation += 0.001 * sin(t * pi * 8) * (t * (1 - t));
+      lngVariation += 0.001 * cos(t * pi * 7) * (t * (1 - t));
+      
+      route.add(LatLng(lat + latVariation, lng + lngVariation));
+    }
+    
+    route.add(end);
+    
+    print('Ruta realista de emergencia generada con ${route.length} puntos');
+    return route;
+  }
+
+  /// Crea una ruta realista entre dos puntos usando algoritmos de interpolación
   static List<LatLng> _createRealisticPath(LatLng start, LatLng end) {
-    List<LatLng> path = [];
     
     // Calcular la distancia y dirección
     final distance = _distance.as(LengthUnit.Kilometer, start, end);
     final bearing = _distance.bearing(start, end);
     
     // Número de puntos intermedios basado en la distancia (más puntos para rutas más largas)
-    int numPoints = (distance / 3).ceil().clamp(5, 30); // Un punto cada 3km aproximadamente
+    int numPoints = (distance / 2).ceil().clamp(8, 50); // Un punto cada 2km aproximadamente
     
     // Determinar el tipo de ruta basado en las coordenadas
     final routeType = _determineRouteType(start, end);
     
-    for (int i = 1; i <= numPoints; i++) {
-      double fraction = i / numPoints;
-      
-      // Interpolación básica
-      double lat = start.latitude + (end.latitude - start.latitude) * fraction;
-      double lng = start.longitude + (end.longitude - start.longitude) * fraction;
-      
-      // Aplicar variaciones realistas basadas en el tipo de ruta
-      if (i > 1 && i < numPoints) {
-        final variations = _getRouteVariations(routeType, fraction, i, numPoints);
-        lat += variations['lat']!;
-        lng += variations['lng']!;
-      }
-      
-      path.add(LatLng(lat, lng));
+    // Agregar puntos de control para crear curvas más realistas
+    final controlPoints = _generateControlPoints(start, end, routeType);
+    
+    // Generar ruta usando spline cúbico para suavidad
+    final splinePoints = _generateSplineRoute(start, end, controlPoints, numPoints);
+    
+    return splinePoints;
+  }
+
+  /// Genera puntos de control para crear rutas más realistas
+  static List<LatLng> _generateControlPoints(LatLng start, LatLng end, String routeType) {
+    List<LatLng> controlPoints = [];
+    
+    // Calcular punto medio
+    final midLat = (start.latitude + end.latitude) / 2;
+    final midLng = (start.longitude + end.longitude) / 2;
+    
+    // Agregar desviaciones basadas en el tipo de ruta
+    switch (routeType) {
+      case 'coastal':
+        // Rutas costeras: siguen la línea de costa
+        controlPoints.add(LatLng(midLat + 0.02, midLng - 0.015));
+        controlPoints.add(LatLng(midLat - 0.01, midLng + 0.02));
+        break;
+        
+      case 'mountain':
+        // Rutas de montaña: zigzag por la topografía
+        controlPoints.add(LatLng(midLat + 0.015, midLng + 0.01));
+        controlPoints.add(LatLng(midLat - 0.008, midLng - 0.012));
+        controlPoints.add(LatLng(midLat + 0.005, midLng + 0.008));
+        break;
+        
+      case 'valley':
+        // Rutas de valle: curvas suaves
+        controlPoints.add(LatLng(midLat + 0.008, midLng - 0.005));
+        break;
     }
     
-    return path;
+    return controlPoints;
+  }
+
+  /// Genera una ruta suave usando interpolación spline
+  static List<LatLng> _generateSplineRoute(LatLng start, LatLng end, List<LatLng> controlPoints, int numPoints) {
+    List<LatLng> allPoints = [start, ...controlPoints, end];
+    List<LatLng> splinePoints = [];
+    
+    for (int i = 0; i <= numPoints; i++) {
+      double t = i / numPoints;
+      LatLng point = _interpolateSpline(allPoints, t);
+      splinePoints.add(point);
+    }
+    
+    return splinePoints;
+  }
+
+  /// Interpolación spline cúbico para rutas suaves
+  static LatLng _interpolateSpline(List<LatLng> points, double t) {
+    if (points.length < 2) return points.first;
+    if (points.length == 2) {
+      // Interpolación lineal simple
+      final lat = points[0].latitude + (points[1].latitude - points[0].latitude) * t;
+      final lng = points[0].longitude + (points[1].longitude - points[0].longitude) * t;
+      return LatLng(lat, lng);
+    }
+    
+    // Para múltiples puntos, usar interpolación de Bézier
+    return _bezierInterpolation(points, t);
+  }
+
+  /// Interpolación de Bézier para curvas suaves
+  static LatLng _bezierInterpolation(List<LatLng> points, double t) {
+    List<LatLng> tempPoints = List.from(points);
+    
+    while (tempPoints.length > 1) {
+      List<LatLng> newPoints = [];
+      for (int i = 0; i < tempPoints.length - 1; i++) {
+        final lat = tempPoints[i].latitude + (tempPoints[i + 1].latitude - tempPoints[i].latitude) * t;
+        final lng = tempPoints[i].longitude + (tempPoints[i + 1].longitude - tempPoints[i].longitude) * t;
+        newPoints.add(LatLng(lat, lng));
+      }
+      tempPoints = newPoints;
+    }
+    
+    return tempPoints.first;
   }
 
   /// Determina el tipo de ruta basado en las coordenadas de inicio y fin
@@ -347,14 +553,14 @@ class RouteTracingService {
     switch (routeType) {
       case 'coastal':
         // Rutas costeras: más curvas y desviaciones
-        latVariation = 0.004 * Math.sin(fraction * Math.pi * 3) * (fraction * (1 - fraction));
-        lngVariation = 0.003 * Math.cos(fraction * Math.pi * 2.5) * (fraction * (1 - fraction));
+        latVariation = 0.004 * sin(fraction * pi * 3) * (fraction * (1 - fraction));
+        lngVariation = 0.003 * cos(fraction * pi * 2.5) * (fraction * (1 - fraction));
         break;
         
       case 'mountain':
         // Rutas de montaña: curvas serpenteantes
-        latVariation = 0.003 * Math.sin(fraction * Math.pi * 4) * (fraction * (1 - fraction));
-        lngVariation = 0.002 * Math.cos(fraction * Math.pi * 3) * (fraction * (1 - fraction));
+        latVariation = 0.003 * sin(fraction * pi * 4) * (fraction * (1 - fraction));
+        lngVariation = 0.002 * cos(fraction * pi * 3) * (fraction * (1 - fraction));
         // Agregar variación adicional para simular zigzag de montaña
         if (pointIndex % 3 == 0) {
           latVariation += 0.001 * (pointIndex % 2 == 0 ? 1 : -1);
@@ -363,8 +569,8 @@ class RouteTracingService {
         
       case 'valley':
         // Rutas de valle: más directas pero con algunas curvas suaves
-        latVariation = 0.002 * Math.sin(fraction * Math.pi * 2) * (fraction * (1 - fraction));
-        lngVariation = 0.0015 * Math.cos(fraction * Math.pi * 1.5) * (fraction * (1 - fraction));
+        latVariation = 0.002 * sin(fraction * pi * 2) * (fraction * (1 - fraction));
+        lngVariation = 0.0015 * cos(fraction * pi * 1.5) * (fraction * (1 - fraction));
         break;
     }
     
@@ -528,6 +734,7 @@ class RouteTracingService {
   /// Calcula la distancia total de la ruta
   static double calculateRouteDistance(List<LatLng> routePoints) {
     if (routePoints.length < 2) return 0.0;
+    if (routePoints.length < 2) return 0.0;
 
     double totalDistance = 0.0;
     for (int i = 0; i < routePoints.length - 1; i++) {
@@ -553,6 +760,68 @@ class RouteTracingService {
     }
 
     return nearest;
+  }
+
+  // Try GraphHopper API (OpenStreetMap based)
+  static Future<List<LatLng>> _getGraphHopperRoute(LatLng start, LatLng end) async {
+    try {
+      final url = 'https://graphhopper.com/api/1/route'
+          '?point=${start.latitude},${start.longitude}'
+          '&point=${end.latitude},${end.longitude}'
+          '&vehicle=car'
+          '&locale=es'
+          '&key=YOUR_GRAPHHOPPER_API_KEY'; // Replace with your API key
+      
+      final response = await http.get(Uri.parse(url));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['paths'] != null && data['paths'].isNotEmpty) {
+          final points = data['paths'][0]['points'];
+          return _decodePolyline(points);
+        }
+      }
+    } catch (e) {
+      print('GraphHopper API error: $e');
+    }
+    
+    throw Exception('GraphHopper route not available');
+  }
+
+  // Decode polyline points
+  static List<LatLng> _decodePolyline(String encoded) {
+    List<LatLng> points = [];
+    int index = 0;
+    int len = encoded.length;
+    int lat = 0;
+    int lng = 0;
+
+    while (index < len) {
+      int b;
+      int shift = 0;
+      int result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      points.add(LatLng(lat / 1E5, lng / 1E5));
+    }
+
+    return points;
   }
 }
 
