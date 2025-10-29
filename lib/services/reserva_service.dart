@@ -9,23 +9,34 @@ class ReservaService {
   // Crear una nueva reserva
   Future<ReservaModel> crearReserva(ReservaModel reserva) async {
     try {
-      // Verificar disponibilidad de cupos
-      final disponible = await _viajeService.verificarDisponibilidadCupos(
+      // Verificar disponibilidad de asientos
+      final disponible = await _verificarDisponibilidadAsientos(
         reserva.viajeId, 
         reserva.numeroAsientos
       );
 
       if (!disponible) {
-        throw Exception('No hay cupos disponibles para este viaje');
+        throw Exception('No hay asientos disponibles para este viaje');
       }
+
+      // Primero, crear o verificar que existe el pasajero
+      final pasajeroId = await _crearOVerificarPasajero(reserva);
 
       // Generar código de reserva único
       final codigoReserva = _generarCodigoReserva();
-      final reservaConCodigo = reserva.copyWith(codigoReserva: codigoReserva);
+
+      // Crear la reserva en la tabla reservations (según el esquema SQL real)
+      final reservaData = {
+        'trip_id': reserva.viajeId,
+        'passenger_id': pasajeroId, // Usar el ID del pasajero válido
+        'seats_reserved': reserva.numeroAsientos,
+        'total_price': reserva.precioFinal,
+        'status': _mapearEstado(reserva.estado),
+      };
 
       final response = await _supabase
-          .from('reservas')
-          .insert(reservaConCodigo.toJson())
+          .from('reservations')
+          .insert(reservaData)
           .select()
           .maybeSingle();
 
@@ -33,79 +44,38 @@ class ReservaService {
         throw Exception('Error al crear la reserva');
       }
 
-      // Actualizar cupos ocupados en el viaje
-      await _actualizarCuposViaje(reserva.viajeId, reserva.numeroAsientos);
+      // Actualizar asientos disponibles
+      await _actualizarAsientosDisponibles(reserva.viajeId, reserva.numeroAsientos);
 
-      return ReservaModel.fromJson(response);
+      // Convertir la respuesta al modelo de reserva
+      final reservaCreada = reserva.copyWith(
+        id: response['id'],
+        codigoReserva: codigoReserva,
+        createdAt: DateTime.parse(response['created_at']),
+      );
+
+      return reservaCreada;
     } catch (e) {
       throw Exception('Error al crear reserva: $e');
     }
+  }
+
+  // Obtener reservas por pasajero (alias para obtenerReservasPorUsuario)
+  Future<List<ReservaModel>> obtenerReservasPorPasajero(String pasajeroId) async {
+    return await obtenerReservasPorUsuario(pasajeroId);
   }
 
   // Obtener reservas por usuario
   Future<List<ReservaModel>> obtenerReservasPorUsuario(String usuarioId) async {
     try {
       final response = await _supabase
-          .from('reservas')
-          .select('''
-            *,
-            viajes!inner(
-              fecha_salida,
-              hora_salida,
-              precio,
-              rutas!inner(origen, destino)
-            )
-          ''')
-          .eq('usuario_id', usuarioId)
+          .from('reservations')
+          .select('*')
+          .eq('passenger_id', usuarioId)
           .order('created_at', ascending: false);
 
       return response.map<ReservaModel>((json) {
-        // Agregar información del viaje
-        final viaje = json['viajes'];
-        final ruta = viaje?['rutas'];
-        
-        json['viaje_fecha_salida'] = viaje?['fecha_salida'];
-        json['viaje_hora_salida'] = viaje?['hora_salida'];
-        json['viaje_precio'] = viaje?['precio'];
-        json['viaje_origen'] = ruta?['origen'];
-        json['viaje_destino'] = ruta?['destino'];
-        
-        return ReservaModel.fromJson(json);
-      }).toList();
-    } catch (e) {
-      throw Exception('Error al obtener reservas: $e');
-    }
-  }
-
-  // Obtener reservas por empresa
-  Future<List<ReservaModel>> obtenerReservasPorEmpresa(String empresaId) async {
-    try {
-      final response = await _supabase
-          .from('reservas')
-          .select('''
-            *,
-            viajes!inner(
-              fecha_salida,
-              hora_salida,
-              precio,
-              rutas!inner(origen, destino)
-            )
-          ''')
-          .eq('empresa_id', empresaId)
-          .order('created_at', ascending: false);
-
-      return response.map<ReservaModel>((json) {
-        // Agregar información del viaje
-        final viaje = json['viajes'];
-        final ruta = viaje?['rutas'];
-        
-        json['viaje_fecha_salida'] = viaje?['fecha_salida'];
-        json['viaje_hora_salida'] = viaje?['hora_salida'];
-        json['viaje_precio'] = viaje?['precio'];
-        json['viaje_origen'] = ruta?['origen'];
-        json['viaje_destino'] = ruta?['destino'];
-        
-        return ReservaModel.fromJson(json);
+        return _convertirReservaDesdeSQL(json);
       }).toList();
     } catch (e) {
       throw Exception('Error al obtener reservas: $e');
@@ -116,85 +86,16 @@ class ReservaService {
   Future<ReservaModel?> obtenerReservaPorId(String reservaId) async {
     try {
       final response = await _supabase
-          .from('reservas')
-          .select('''
-            *,
-            viajes!inner(
-              fecha_salida,
-              hora_salida,
-              precio,
-              rutas!inner(origen, destino)
-            )
-          ''')
+          .from('reservations')
+          .select('*')
           .eq('id', reservaId)
           .maybeSingle();
 
       if (response == null) return null;
 
-      // Agregar información del viaje
-      final viaje = response['viajes'];
-      final ruta = viaje?['rutas'];
-      
-      response['viaje_fecha_salida'] = viaje?['fecha_salida'];
-      response['viaje_hora_salida'] = viaje?['hora_salida'];
-      response['viaje_precio'] = viaje?['precio'];
-      response['viaje_origen'] = ruta?['origen'];
-      response['viaje_destino'] = ruta?['destino'];
-
-      return ReservaModel.fromJson(response);
+      return _convertirReservaDesdeSQL(response);
     } catch (e) {
       throw Exception('Error al obtener reserva: $e');
-    }
-  }
-
-  // Obtener reserva por código
-  Future<ReservaModel?> obtenerReservaPorCodigo(String codigoReserva) async {
-    try {
-      final response = await _supabase
-          .from('reservas')
-          .select('''
-            *,
-            viajes!inner(
-              fecha_salida,
-              hora_salida,
-              precio,
-              rutas!inner(origen, destino)
-            )
-          ''')
-          .eq('codigo_reserva', codigoReserva)
-          .maybeSingle();
-
-      if (response == null) return null;
-
-      // Agregar información del viaje
-      final viaje = response['viajes'];
-      final ruta = viaje?['rutas'];
-      
-      response['viaje_fecha_salida'] = viaje?['fecha_salida'];
-      response['viaje_hora_salida'] = viaje?['hora_salida'];
-      response['viaje_precio'] = viaje?['precio'];
-      response['viaje_origen'] = ruta?['origen'];
-      response['viaje_destino'] = ruta?['destino'];
-
-      return ReservaModel.fromJson(response);
-    } catch (e) {
-      throw Exception('Error al obtener reserva: $e');
-    }
-  }
-
-  // Actualizar reserva
-  Future<ReservaModel?> actualizarReserva(ReservaModel reserva) async {
-    try {
-      final response = await _supabase
-          .from('reservas')
-          .update(reserva.toJson())
-          .eq('id', reserva.id)
-          .select()
-          .maybeSingle();
-
-      return response != null ? ReservaModel.fromJson(response) : null;
-    } catch (e) {
-      throw Exception('Error al actualizar reserva: $e');
     }
   }
 
@@ -202,10 +103,9 @@ class ReservaService {
   Future<void> cambiarEstadoReserva(String reservaId, ReservaStatus nuevoEstado) async {
     try {
       await _supabase
-          .from('reservas')
+          .from('reservations')
           .update({
-            'estado': nuevoEstado.toString().split('.').last,
-            'updated_at': DateTime.now().toIso8601String(),
+            'status': _mapearEstado(nuevoEstado),
           })
           .eq('id', reservaId);
     } catch (e) {
@@ -213,218 +113,166 @@ class ReservaService {
     }
   }
 
-  // Confirmar pago de reserva
-  Future<void> confirmarPago(String reservaId, MetodoPago metodoPago, {String? transactionId}) async {
-    try {
-      await _supabase
-          .from('reservas')
-          .update({
-            'estado': ReservaStatus.pagada.toString().split('.').last,
-            'metodo_pago': metodoPago.toString().split('.').last,
-            'fecha_pago': DateTime.now().toIso8601String(),
-            'transaction_id': transactionId,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', reservaId);
-    } catch (e) {
-      throw Exception('Error al confirmar pago: $e');
-    }
-  }
-
   // Cancelar reserva
   Future<void> cancelarReserva(String reservaId) async {
     try {
-      // Obtener información de la reserva
       final reserva = await obtenerReservaPorId(reservaId);
       if (reserva == null) {
         throw Exception('Reserva no encontrada');
       }
 
-      // Cambiar estado a cancelada
       await cambiarEstadoReserva(reservaId, ReservaStatus.cancelada);
-
-      // Liberar cupos en el viaje
-      await _liberarCuposViaje(reserva.viajeId, reserva.numeroAsientos);
+      await _liberarAsientos(reserva.viajeId, reserva.numeroAsientos);
     } catch (e) {
       throw Exception('Error al cancelar reserva: $e');
     }
   }
 
-  // Buscar reservas
-  Future<List<ReservaModel>> buscarReservas({
-    required String empresaId,
-    String? query,
-    ReservaStatus? estado,
-    DateTime? fechaDesde,
-    DateTime? fechaHasta,
-  }) async {
+  // Crear o verificar que existe el pasajero
+  Future<String> _crearOVerificarPasajero(ReservaModel reserva) async {
     try {
-      var queryBuilder = _supabase
-          .from('reservas')
-          .select('''
-            *,
-            viajes!inner(
-              fecha_salida,
-              hora_salida,
-              precio,
-              rutas!inner(origen, destino)
-            )
-          ''')
-          .eq('empresa_id', empresaId);
+      // Primero verificar si ya existe un pasajero con este user_id
+      final existingPassenger = await _supabase
+          .from('pasajeros')
+          .select('id')
+          .eq('user_id', reserva.usuarioId)
+          .maybeSingle();
 
-      if (estado != null) {
-        queryBuilder = queryBuilder.eq('estado', estado.toString().split('.').last);
+      if (existingPassenger != null) {
+        return existingPassenger['id'];
       }
 
-      if (fechaDesde != null) {
-        queryBuilder = queryBuilder.gte('created_at', fechaDesde.toIso8601String());
+      // Verificar si el user_id existe en la tabla users
+      final userExists = await _supabase
+          .from('users')
+          .select('id')
+          .eq('id', reserva.usuarioId)
+          .maybeSingle();
+
+      if (userExists == null) {
+        // Si el usuario no existe, crear uno primero
+        final userData = {
+          'id': reserva.usuarioId,
+          'email': '${reserva.nombrePasajero.toLowerCase().replaceAll(' ', '')}@temp.com',
+          'password_hash': 'temp_hash',
+          'role': 'pasajero',
+        };
+
+        await _supabase
+            .from('users')
+            .insert(userData);
       }
 
-      if (fechaHasta != null) {
-        queryBuilder = queryBuilder.lte('created_at', fechaHasta.toIso8601String());
-      }
-
-      final response = await queryBuilder.order('created_at', ascending: false);
-
-      var reservas = response.map<ReservaModel>((json) {
-        // Agregar información del viaje
-        final viaje = json['viajes'];
-        final ruta = viaje?['rutas'];
-        
-        json['viaje_fecha_salida'] = viaje?['fecha_salida'];
-        json['viaje_hora_salida'] = viaje?['hora_salida'];
-        json['viaje_precio'] = viaje?['precio'];
-        json['viaje_origen'] = ruta?['origen'];
-        json['viaje_destino'] = ruta?['destino'];
-        
-        return ReservaModel.fromJson(json);
-      }).toList();
-
-      // Filtrar por query si se proporciona
-      if (query != null && query.isNotEmpty) {
-        final queryLower = query.toLowerCase();
-        reservas = reservas.where((reserva) {
-          return reserva.nombrePasajero.toLowerCase().contains(queryLower) ||
-                 reserva.telefonoPasajero.toLowerCase().contains(queryLower) ||
-                 (reserva.codigoReserva?.toLowerCase().contains(queryLower) ?? false) ||
-                 (reserva.documentoPasajero?.toLowerCase().contains(queryLower) ?? false);
-        }).toList();
-      }
-
-      return reservas;
-    } catch (e) {
-      throw Exception('Error al buscar reservas: $e');
-    }
-  }
-
-  // Obtener estadísticas de reservas
-  Future<Map<String, dynamic>> obtenerEstadisticasReservas(String empresaId) async {
-    try {
-      final response = await _supabase
-          .from('reservas')
-          .select('estado, numero_asientos, precio_final')
-          .eq('empresa_id', empresaId);
-
-      int totalReservas = response.length;
-      int reservasPendientes = 0;
-      int reservasConfirmadas = 0;
-      int reservasPagadas = 0;
-      int reservasCanceladas = 0;
-      int reservasCompletadas = 0;
-      int totalAsientos = 0;
-      double ingresosTotales = 0;
-
-      for (final reserva in response) {
-        final estado = reserva['estado'] as String;
-        final asientos = reserva['numero_asientos'] as int? ?? 0;
-        final precio = (reserva['precio_final'] as num?)?.toDouble() ?? 0;
-
-        switch (estado) {
-          case 'pendiente':
-            reservasPendientes++;
-            break;
-          case 'confirmada':
-            reservasConfirmadas++;
-            break;
-          case 'pagada':
-            reservasPagadas++;
-            ingresosTotales += precio;
-            break;
-          case 'cancelada':
-            reservasCanceladas++;
-            break;
-          case 'completada':
-            reservasCompletadas++;
-            ingresosTotales += precio;
-            break;
-        }
-
-        totalAsientos += asientos;
-      }
-
-      return {
-        'total_reservas': totalReservas,
-        'reservas_pendientes': reservasPendientes,
-        'reservas_confirmadas': reservasConfirmadas,
-        'reservas_pagadas': reservasPagadas,
-        'reservas_canceladas': reservasCanceladas,
-        'reservas_completadas': reservasCompletadas,
-        'total_asientos_reservados': totalAsientos,
-        'ingresos_totales': ingresosTotales,
+      // Ahora crear el pasajero con user_id válido
+      final pasajeroData = {
+        'user_id': reserva.usuarioId,
+        'name': reserva.nombrePasajero,
+        'phone': reserva.telefonoPasajero ?? '',
+        'rating': 5.0,
       };
+
+      final response = await _supabase
+          .from('pasajeros')
+          .insert(pasajeroData)
+          .select('id')
+          .single();
+
+      return response['id'];
     } catch (e) {
-      throw Exception('Error al obtener estadísticas: $e');
+      throw Exception('Error al crear o verificar pasajero: $e');
     }
   }
 
-  // Métodos privados
+  // Métodos privados de utilidad
   String _generarCodigoReserva() {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = (timestamp % 10000).toString().padLeft(4, '0');
     return 'RES$random';
   }
 
-  Future<void> _actualizarCuposViaje(String viajeId, int cuposReservados) async {
-    try {
-      // Obtener cupos actuales
-      final response = await _supabase
-          .from('viajes')
-          .select('cupos_ocupados')
-          .eq('id', viajeId)
-          .maybeSingle();
-
-      if (response == null) {
-        throw Exception('Viaje no encontrado');
-      }
-
-      final cuposActuales = response['cupos_ocupados'] as int;
-      final nuevosCupos = cuposActuales + cuposReservados;
-
-      await _viajeService.actualizarCuposOcupados(viajeId, nuevosCupos);
-    } catch (e) {
-      throw Exception('Error al actualizar cupos del viaje: $e');
+  String _mapearEstado(ReservaStatus estado) {
+    switch (estado) {
+      case ReservaStatus.pendiente:
+        return 'pending';
+      case ReservaStatus.confirmada:
+        return 'confirmed';
+      case ReservaStatus.cancelada:
+        return 'cancelled';
+      default:
+        return 'pending';
     }
   }
 
-  Future<void> _liberarCuposViaje(String viajeId, int cuposALiberar) async {
-    try {
-      // Obtener cupos actuales
-      final response = await _supabase
-          .from('viajes')
-          .select('cupos_ocupados')
-          .eq('id', viajeId)
-          .maybeSingle();
+  ReservaStatus _mapearEstadoDesdeSQL(String estado) {
+    switch (estado) {
+      case 'pending':
+        return ReservaStatus.pendiente;
+      case 'confirmed':
+        return ReservaStatus.confirmada;
+      case 'cancelled':
+        return ReservaStatus.cancelada;
+      default:
+        return ReservaStatus.pendiente;
+    }
+  }
 
-      if (response == null) {
-        throw Exception('Viaje no encontrado');
+  ReservaModel _convertirReservaDesdeSQL(Map<String, dynamic> json) {
+    return ReservaModel(
+      id: json['id'],
+      viajeId: json['trip_id'],
+      usuarioId: json['passenger_id'],
+      empresaId: '', // No está en la tabla SQL
+      nombrePasajero: '', // No está en la tabla SQL
+      telefonoPasajero: '', // No está en la tabla SQL
+      documentoPasajero: '', // No está en la tabla SQL
+      emailPasajero: '', // No está en la tabla SQL
+      numeroAsientos: json['seats_reserved'] ?? 1,
+      asientosSeleccionados: [], // No está en la tabla SQL
+      precioTotal: (json['total_price'] ?? 0.0).toDouble(),
+      precioFinal: (json['total_price'] ?? 0.0).toDouble(),
+      descuento: null,
+      metodoPago: MetodoPago.efectivo, // Valor por defecto
+      transactionId: '', // No está en la tabla SQL
+      estado: _mapearEstadoDesdeSQL(json['status'] ?? 'pending'),
+      codigoReserva: '', // Se genera al crear
+      createdAt: json['created_at'] != null 
+          ? DateTime.parse(json['created_at']) 
+          : DateTime.now(),
+      updatedAt: json['updated_at'] != null 
+          ? DateTime.parse(json['updated_at']) 
+          : DateTime.now(),
+    );
+  }
+
+  Future<bool> _verificarDisponibilidadAsientos(String viajeId, int asientosSolicitados) async {
+    try {
+      // Obtener asientos ocupados actuales
+      final response = await _supabase
+          .from('reservations')
+          .select('seats_reserved')
+          .eq('trip_id', viajeId)
+          .eq('status', 'confirmed');
+
+      int asientosOcupados = 0;
+      for (final reserva in response) {
+        asientosOcupados += (reserva['seats_reserved'] as int? ?? 0);
       }
 
-      final cuposActuales = response['cupos_ocupados'] as int;
-      final nuevosCupos = (cuposActuales - cuposALiberar).clamp(0, cuposActuales);
-
-      await _viajeService.actualizarCuposOcupados(viajeId, nuevosCupos);
+      // Asumir capacidad máxima de 40 asientos por viaje
+      const capacidadMaxima = 40;
+      return (asientosOcupados + asientosSolicitados) <= capacidadMaxima;
     } catch (e) {
-      throw Exception('Error al liberar cupos del viaje: $e');
+      return false;
     }
+  }
+
+  Future<void> _actualizarAsientosDisponibles(String viajeId, int asientosReservados) async {
+    // Este método podría actualizar una tabla de viajes si existe
+    // Por ahora, solo registramos la reserva en la tabla reservations
+  }
+
+  Future<void> _liberarAsientos(String viajeId, int asientosALiberar) async {
+    // Este método podría actualizar una tabla de viajes si existe
+    // Por ahora, la cancelación se maneja cambiando el estado de la reserva
   }
 }

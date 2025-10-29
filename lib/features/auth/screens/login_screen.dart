@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/services/supabase_service.dart';
-import '../controllers/auth_controller.dart';
+import '../../../controllers/auth_controller.dart';
 import '../../company/screens/dashboard_screen.dart';
 import '../../driver/screens/profile_screen.dart';
 import '../../passenger/screens/passenger_home_screen.dart';
@@ -17,37 +18,39 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _authController = AuthController();
   bool _loading = false;
 
   Future<void> _login() async {
     setState(() => _loading = true);
 
     try {
-      await _authController.login(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
+      final authController = Provider.of<AuthController>(context, listen: false);
+      final success = await authController.signIn(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
-      final user = SupabaseService().client.auth.currentUser;
-      final role = user?.userMetadata?['role'] ?? 'pasajero';
-
-      if (context.mounted) {
+      if (success && context.mounted) {
+        final authController = Provider.of<AuthController>(context, listen: false);
+        final userProfile = authController.userProfile;
+        
         Widget nextScreen;
-        switch (role) {
-          case 'empresa':
-            nextScreen = const CompanyDashboardScreen();
-            break;
-          case 'conductor':
-            nextScreen = const DriverProfileScreen();
-            break;
-          default:
-            nextScreen = const PassengerHomeScreen();
+        if (userProfile?.isEmpresa == true) {
+          nextScreen = const CompanyDashboardScreen();
+        } else if (userProfile?.isConductor == true) {
+          nextScreen = const DriverProfileScreen();
+        } else {
+          nextScreen = const PassengerHomeScreen();
         }
 
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => nextScreen),
+        );
+      } else if (!success) {
+        final authController = Provider.of<AuthController>(context, listen: false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al iniciar sesión: ${authController.errorMessage}')),
         );
       }
     } catch (e) {

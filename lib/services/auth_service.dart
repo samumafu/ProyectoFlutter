@@ -152,7 +152,7 @@ class AuthService {
       if (direccion != null) updateData['direccion'] = direccion;
       if (municipio != null) updateData['municipio'] = municipio;
       if (fotoPerfilUrl != null) updateData['foto_perfil_url'] = fotoPerfilUrl;
-
+      
       if (updateData.isNotEmpty) {
         updateData['updated_at'] = DateTime.now().toIso8601String();
         
@@ -197,7 +197,6 @@ class AuthService {
           .from('usuarios')
           .update({
             'email_verificado': true,
-            'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', user.id);
     } catch (e) {
@@ -216,7 +215,6 @@ class AuthService {
           .from('usuarios')
           .update({
             'telefono_verificado': true,
-            'updated_at': DateTime.now().toIso8601String(),
           })
           .eq('id', user.id);
     } catch (e) {

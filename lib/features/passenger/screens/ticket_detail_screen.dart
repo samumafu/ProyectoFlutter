@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 import '../../../data/models/ticket_model.dart';
 import '../../../data/popular_routes_manager.dart';
+import '../../../models/reserva_model.dart';
+import '../../../controllers/auth_controller.dart';
 import 'seat_selection_screen.dart';
 import 'chat_screen.dart';
 import 'driver_tracking_screen.dart';
+import '../../../services/reserva_service.dart';
 
 class TicketDetailScreen extends StatefulWidget {
   final Ticket ticket;
@@ -752,11 +756,56 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
     );
   }
 
-  void _confirmBooking(List<int> selectedSeats, double totalPrice) {
-    // Registrar la reserva en el sistema de rutas populares
-    PopularRoutesManager.recordBooking(widget.ticket.origin, widget.ticket.destination);
-    
-    _showBookingSuccess();
+  void _confirmBooking(List<int> selectedSeats, double totalPrice) async {
+    try {
+      // Obtener el usuario actual del AuthController
+      final authController = Provider.of<AuthController>(context, listen: false);
+      final currentUser = authController.user;
+      final userProfile = authController.userProfile;
+      
+      if (currentUser == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Error: Usuario no autenticado'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Crear reserva usando ReservaService (Supabase)
+      final reservaService = ReservaService();
+      
+      final reserva = await reservaService.crearReserva(
+        ReservaModel(
+          id: '', // Se generará automáticamente
+          viajeId: widget.ticket.id,
+          usuarioId: currentUser.id, // ID real del usuario autenticado
+          empresaId: widget.ticket.companyId ?? 'default_company',
+          nombrePasajero: userProfile?.nombres ?? 'Pasajero',
+          telefonoPasajero: userProfile?.telefono ?? '0000000000',
+          numeroAsientos: _selectedPassengers,
+          asientosSeleccionados: selectedSeats.map((s) => s.toString()).toList(),
+          precioTotal: totalPrice,
+          precioFinal: totalPrice,
+          estado: ReservaStatus.pendiente,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      
+      // Registrar la reserva en el sistema de rutas populares
+      PopularRoutesManager.recordBooking(widget.ticket.origin, widget.ticket.destination);
+      
+      _showBookingSuccess();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al crear la reserva: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _showBookingSuccess() {

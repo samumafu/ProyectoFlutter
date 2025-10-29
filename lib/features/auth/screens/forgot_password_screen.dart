@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../controllers/auth_controller.dart';
+import '../../../controllers/auth_controller.dart';
+import 'package:provider/provider.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -10,19 +11,25 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
-  final _authController = AuthController();
   bool _loading = false;
 
   Future<void> _resetPassword() async {
     setState(() => _loading = true);
 
     try {
-      await _authController.resetPassword(_emailController.text.trim());
+      final authController = Provider.of<AuthController>(context, listen: false);
+      final success = await authController.resetPassword(_emailController.text.trim());
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Correo de recuperación enviado')),
-        );
-        Navigator.pop(context);
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Correo de recuperación enviado')),
+          );
+          Navigator.pop(context);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: ${authController.errorMessage}')),
+          );
+        }
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(

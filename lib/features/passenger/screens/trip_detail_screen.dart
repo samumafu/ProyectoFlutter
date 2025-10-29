@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import '../../../data/models/ticket_model.dart' hide Booking, BookingStatus;
 import '../../../models/booking.dart';
 import '../../../services/booking_service.dart';
+import '../../../services/reserva_service.dart';
 import 'package:latlong2/latlong.dart';
 
 class TicketDetailScreen extends StatefulWidget {
@@ -574,24 +575,15 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
 
   void _proceedToBooking() async {
     try {
-      // Crear la reserva
-      final booking = Booking(
-        id: BookingService.generateBookingId(),
-        origin: widget.ticket.origin,
-        destination: widget.ticket.destination,
-        departureDate: widget.ticket.departureTime, // Usar departureTime como fecha
-        departureTime: DateFormat('HH:mm').format(widget.ticket.departureTime),
-        selectedSeats: List.generate(_selectedSeats, (index) => 'A${index + 1}'),
-        totalPrice: widget.ticket.price * _selectedSeats,
-        pickupPointName: 'Terminal Principal',
-        pickupPointDescription: 'Terminal de transporte de ${widget.ticket.origin}',
-        pickupPointCoordinates: const LatLng(1.2136, -77.2811), // Coordenadas por defecto
-        bookingDate: DateTime.now(),
-        status: BookingStatus.confirmed,
+      // Crear reserva usando ReservaService (Supabase)
+      final reservaService = ReservaService();
+      
+      final reserva = await reservaService.crearReserva(
+        viajeId: widget.ticket.id, // Usar el ID del ticket como viaje ID
+        pasajeroId: 'current_user_id', // TODO: Obtener ID del usuario actual
+        numeroAsientos: _selectedSeats,
+        precioTotal: widget.ticket.price * _selectedSeats,
       );
-
-      // Guardar la reserva
-      await BookingService.saveBooking(booking);
 
       if (mounted) {
         showDialog(
@@ -601,7 +593,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
             content: Text(
               'Has reservado $_selectedSeats ${_selectedSeats == 1 ? 'asiento' : 'asientos'} '
               'para el viaje de ${widget.ticket.origin} a ${widget.ticket.destination}.\n\n'
-              'Total: \$${(widget.ticket.price * _selectedSeats).toStringAsFixed(0)}\n\n'
+              'Código de reserva: ${reserva.codigoReserva}\n'
+              'Total: \$${reserva.precioTotal.toStringAsFixed(0)}\n\n'
               'Tu reserva ha sido guardada en "Mis Viajes".',
             ),
             actions: [

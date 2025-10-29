@@ -102,16 +102,14 @@ class ReservaModel {
       nombrePasajero: json['nombre_pasajero'] ?? '',
       telefonoPasajero: json['telefono_pasajero'] ?? '',
       emailPasajero: json['email_pasajero'],
-      documentoPasajero: json['documento_pasajero'],
-      numeroAsientos: json['numero_asientos'] ?? 1,
-      asientosSeleccionados: json['asientos_seleccionados'] != null
-          ? List<String>.from(json['asientos_seleccionados'])
+      documentoPasajero: json['cedula_pasajero'], // Mapear desde cedula_pasajero
+      numeroAsientos: 1, // Valor fijo por ahora
+      asientosSeleccionados: json['numero_asiento'] != null 
+          ? [json['numero_asiento'].toString()]
           : [],
-      precioTotal: (json['precio_total'] ?? 0).toDouble(),
-      descuento: json['descuento'] != null 
-          ? (json['descuento']).toDouble() 
-          : null,
-      precioFinal: (json['precio_final'] ?? 0).toDouble(),
+      precioTotal: (json['precio_pagado'] ?? 0).toDouble(),
+      descuento: null,
+      precioFinal: (json['precio_pagado'] ?? 0).toDouble(),
       estado: ReservaStatus.values.firstWhere(
         (e) => e.toString().split('.').last == json['estado'],
         orElse: () => ReservaStatus.pendiente,
@@ -127,9 +125,13 @@ class ReservaModel {
       fechaPago: json['fecha_pago'] != null 
           ? DateTime.parse(json['fecha_pago']) 
           : null,
-      transactionId: json['transaction_id'],
-      createdAt: DateTime.parse(json['created_at']),
-      updatedAt: DateTime.parse(json['updated_at']),
+      transactionId: json['referencia_pago'],
+      createdAt: json['created_at'] != null 
+          ? DateTime.parse(json['created_at'])
+          : DateTime.now(),
+      updatedAt: json['updated_at'] != null 
+          ? DateTime.parse(json['updated_at'])
+          : DateTime.now(),
       viajeOrigen: json['viaje_origen'],
       viajeDestino: json['viaje_destino'],
       viajeFechaSalida: json['viaje_fecha_salida'] != null 
