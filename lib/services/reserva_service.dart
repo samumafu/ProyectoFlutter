@@ -165,17 +165,35 @@ class ReservaService {
           .maybeSingle();
 
       if (userExists == null) {
-        // Si el usuario no existe, crear uno primero
+        // Si el usuario no existe, crear uno primero evitando colisión por email único
+        // Preferir el email real del pasajero si viene, y si existe, caer a un email único basado en el user_id
+        String? emailDeseado = reserva.emailPasajero;
+        String emailFallback = 'u_${reserva.usuarioId}@temp.local';
+
+        if (emailDeseado != null && emailDeseado.isNotEmpty) {
+          final existingByEmail = await _supabase
+              .from('users')
+              .select('id')
+              .eq('email', emailDeseado)
+              .maybeSingle();
+
+          // Si el email ya existe, usar un fallback único para no violar la restricción
+          if (existingByEmail != null) {
+            emailDeseado = emailFallback;
+          }
+        } else {
+          // No se proporcionó email, usar fallback único
+          emailDeseado = emailFallback;
+        }
+
         final userData = {
           'id': reserva.usuarioId,
-          'email': '${reserva.nombrePasajero.toLowerCase().replaceAll(' ', '')}@temp.com',
+          'email': emailDeseado,
           'password_hash': 'temp_hash',
           'role': 'pasajero',
         };
 
-        await _supabase
-            .from('users')
-            .insert(userData);
+        await _supabase.from('users').insert(userData);
       }
 
       // Ahora crear el pasajero con user_id válido
