@@ -13,7 +13,8 @@ class RouteTracingService {
   
   /// Genera una clave única para el cache basada en origen y destino
   static String _getCacheKey(String origin, String destination) {
-    return '${origin}_to_$destination';
+    // Incluir versión de estrategia para invalidar entradas anteriores
+    return 'v3_${origin}_to_${destination}';
   }
   
   /// Guarda una ruta en el cache local persistente
@@ -83,16 +84,22 @@ class RouteTracingService {
     }
 
     try {
-      print('🌐 Intentando obtener ruta real usando OSRM API...');
-      // Intentar obtener ruta real usando OSRM API
-      final realRoute = await _getRealRoute(originCoords, destinationCoords);
-      if (realRoute.isNotEmpty) {
-        // Guardar en cache para uso futuro
-        await _saveRouteToCache(cacheKey, realRoute);
-        print('✅ Ruta real obtenida de OSRM API y guardada en cache: $origin -> $destination (${realRoute.length} puntos)');
-        return realRoute;
-      } else {
-        print('⚠️ OSRM API no devolvió puntos de ruta');
+      // 1) Priorizar la ruta más eficiente (origen → destino) por carretera
+      print('🌐 Intentando obtener ruta real eficiente (directa) usando OSRM API...');
+      final directRoute = await _getRealRoute(originCoords, destinationCoords);
+      if (directRoute.isNotEmpty) {
+        await _saveRouteToCache(cacheKey, directRoute);
+        print('✅ Ruta eficiente directa obtenida y guardada en cache: $origin -> $destination (${directRoute.length} puntos)');
+        return directRoute;
+      }
+
+      // 2) Si falla, intentar con waypoints (paradas intermedias) para guiar la ruta
+      print('⚠️ Ruta directa no disponible. Intentando con waypoints...');
+      final viaStopsRoute = await _getRealRouteWithWaypoints(origin, destination);
+      if (viaStopsRoute.isNotEmpty) {
+        await _saveRouteToCache(cacheKey, viaStopsRoute);
+        print('✅ Ruta con waypoints obtenida y guardada en cache: $origin -> $destination (${viaStopsRoute.length} puntos)');
+        return viaStopsRoute;
       }
     } catch (e) {
       print('❌ Error obteniendo ruta real: $e');
@@ -109,6 +116,108 @@ class RouteTracingService {
       print('❌ Fallback también falló');
     }
     return fallbackRoute;
+  }
+
+  /// Construye una ruta real usando OSRM con múltiples waypoints (paradas intermedias)
+  static Future<List<LatLng>> _getRealRouteWithWaypoints(String origin, String destination) async {
+    final originCoords = RoutesData.getDestinationCoordinates(origin);
+    final destinationCoords = RoutesData.getDestinationCoordinates(destination);
+    if (originCoords == null || destinationCoords == null) return [];
+
+    // Obtener paradas intermedias y convertir a coordenadas
+    final stopsNames = RoutesData.getIntermediateStops(origin, destination);
+    final stopsCoords = stopsNames
+        .map((s) => RoutesData.getDestinationCoordinates(s))
+        .where((c) => c != null)
+        .map((c) => c!)
+        .toList();
+
+    // Construir la lista de waypoints: origen + paradas + destino
+    final waypoints = [originCoords, ...stopsCoords, destinationCoords];
+    if (waypoints.length < 2) return [];
+
+    // Construir la cadena de coordenadas lon,lat separadas por ';'
+    final coordsStr = waypoints
+        .map((p) => '${p.longitude},${p.latitude}')
+        .join(';');
+
+    // Endpoint OSRM principal
+    final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/$coordsStr?overview=full&geometries=geojson');
+    print('Consultando OSRM (waypoints): $url');
+
+    try {
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw Exception('Timeout en OSRM API (waypoints)'),
+      );
+
+      print('Respuesta OSRM (waypoints) - Status: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          if (route['geometry'] != null && route['geometry']['coordinates'] != null) {
+            final coordinates = route['geometry']['coordinates'] as List;
+            final routePoints = coordinates.map<LatLng>((coord) {
+              return LatLng(coord[1].toDouble(), coord[0].toDouble());
+            }).toList();
+
+            final optimizedRoute = _optimizeRoute(routePoints);
+            print('Ruta real (waypoints) obtenida con ${optimizedRoute.length} puntos');
+            return optimizedRoute;
+          }
+        }
+      } else {
+        print('Error OSRM (waypoints): ${response.body}');
+      }
+    } catch (e) {
+      print('Error en OSRM (waypoints): $e');
+      // Intentar con servidor alternativo de OSRM para waypoints
+      return await _getRealRouteWithWaypointsAlternative(waypoints);
+    }
+
+    return [];
+  }
+
+  /// Servidor alternativo para rutas con waypoints
+  static Future<List<LatLng>> _getRealRouteWithWaypointsAlternative(List<LatLng> waypoints) async {
+    if (waypoints.length < 2) return [];
+    final coordsStr = waypoints.map((p) => '${p.longitude},${p.latitude}').join(';');
+    final url = Uri.parse(
+        'https://routing.openstreetmap.de/routed-car/route/v1/driving/$coordsStr?overview=full&geometries=geojson');
+    print('Consultando OSRM alternativo (waypoints): $url');
+
+    try {
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () => throw Exception('Timeout en OSRM alternativo (waypoints)'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          if (route['geometry'] != null && route['geometry']['coordinates'] != null) {
+            final coordinates = route['geometry']['coordinates'] as List;
+            final routePoints = coordinates.map<LatLng>((coord) {
+              return LatLng(coord[1].toDouble(), coord[0].toDouble());
+            }).toList();
+
+            final optimizedRoute = _optimizeRoute(routePoints);
+            print('Ruta alternativa (waypoints) obtenida con ${optimizedRoute.length} puntos');
+            return optimizedRoute;
+          }
+        }
+      } else {
+        print('Error OSRM alternativo (waypoints): ${response.body}');
+      }
+    } catch (e) {
+      print('Error en OSRM alternativo (waypoints): $e');
+    }
+
+    return [];
   }
 
   /// Obtiene una ruta real usando OSRM API (gratuita, sin API key)
@@ -203,25 +312,22 @@ class RouteTracingService {
 
   /// Optimiza la ruta reduciendo puntos redundantes para mejor rendimiento
   static List<LatLng> _optimizeRoute(List<LatLng> route) {
-    if (route.length <= 50) return route;
-    
-    List<LatLng> optimized = [route.first];
-    
-    // Usar algoritmo de Douglas-Peucker simplificado
-    double tolerance = 0.001; // ~100m de tolerancia
-    
-    for (int i = 1; i < route.length - 1; i++) {
-      final prev = optimized.last;
-      final current = route[i];
-      final next = route[i + 1];
-      
-      // Calcular si el punto actual es significativo
-      if (_isSignificantPoint(prev, current, next, tolerance)) {
-        optimized.add(current);
-      }
+    // Mantener todos los puntos para rutas pequeñas y medianas
+    if (route.length <= 500) return route;
+
+    // Para rutas muy largas, muestrear de forma uniforme sin perder forma
+    final targetMaxPoints = 500;
+    final step = (route.length / targetMaxPoints).ceil();
+
+    List<LatLng> optimized = [];
+    for (int i = 0; i < route.length; i += step) {
+      optimized.add(route[i]);
     }
-    
-    optimized.add(route.last);
+    // Asegurar que el último punto esté incluido
+    if (optimized.isEmpty || optimized.last != route.last) {
+      optimized.add(route.last);
+    }
+
     return optimized;
   }
 

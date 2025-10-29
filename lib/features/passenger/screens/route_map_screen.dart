@@ -79,7 +79,26 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
 
     // Centrar el mapa
     final center = LatLng((minLat + maxLat) / 2, (minLng + maxLng) / 2);
-    _mapController.move(center, 10.0);
+
+    // Ajustar zoom según la extensión de la ruta
+    const Distance d = Distance();
+    final diagKm = d.as(LengthUnit.Kilometer, LatLng(minLat, minLng), LatLng(maxLat, maxLng));
+    double zoom;
+    if (diagKm > 100) {
+      zoom = 9.0;
+    } else if (diagKm > 60) {
+      zoom = 10.0;
+    } else if (diagKm > 40) {
+      zoom = 11.0;
+    } else if (diagKm > 25) {
+      zoom = 12.0;
+    } else if (diagKm > 12) {
+      zoom = 13.0;
+    } else {
+      zoom = 14.0;
+    }
+
+    _mapController.move(center, zoom);
   }
 
   void _selectPickupPoint(PickupPoint point) {
@@ -195,7 +214,7 @@ class _RouteMapScreenState extends State<RouteMapScreen> {
       mapController: _mapController,
       options: MapOptions(
         initialCenter: _routePoints.isNotEmpty ? _routePoints.first : const LatLng(1.2136, -77.2811),
-        initialZoom: 10.0,
+        initialZoom: 11.0,
         minZoom: 8.0,
         maxZoom: 18.0,
       ),
