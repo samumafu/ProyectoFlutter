@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../data/models/ticket_model.dart';
+import '../../../services/reserva_service.dart';
 
 class SeatSelectionScreen extends StatefulWidget {
   final Ticket ticket;
@@ -18,6 +19,8 @@ class SeatSelectionScreen extends StatefulWidget {
 class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   List<int> selectedSeats = [];
   late List<SeatStatus> seatStatuses;
+  final ReservaService _reservaService = ReservaService();
+  bool _isLoading = true;
   
   @override
   void initState() {
@@ -25,21 +28,57 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
     _initializeSeats();
   }
 
-  void _initializeSeats() {
-    // Inicializar estados de asientos (simulado)
-    seatStatuses = List.generate(widget.ticket.totalSeats, (index) {
-      // Simular algunos asientos ocupados
-      if ([2, 5, 8, 12, 15, 18, 23, 27, 31, 35].contains(index + 1)) {
-        return SeatStatus.occupied;
-      }
-      return SeatStatus.available;
-    });
+  void _initializeSeats() async {
+    try {
+      // Obtener asientos ocupados desde la base de datos
+      final asientosOcupados = await _reservaService.obtenerAsientosOcupados(widget.ticket.id);
+      
+      // Inicializar estados de asientos
+      seatStatuses = List.generate(widget.ticket.totalSeats, (index) {
+        final seatNumber = (index + 1).toString();
+        if (asientosOcupados.contains(seatNumber)) {
+          return SeatStatus.occupied;
+        }
+        return SeatStatus.available;
+      });
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      // En caso de error, usar datos simulados
+      seatStatuses = List.generate(widget.ticket.totalSeats, (index) {
+        // Simular algunos asientos ocupados como fallback
+        if ([2, 5, 8, 12, 15, 18, 23, 27, 31, 35].contains(index + 1)) {
+          return SeatStatus.occupied;
+        }
+        return SeatStatus.available;
+      });
+      
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final pricePerSeat = widget.ticket.price;
     final totalPrice = selectedSeats.length * pricePerSeat;
+
+    // Mostrar indicador de carga mientras se obtienen los asientos
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Seleccionar Asientos'),
+          backgroundColor: Colors.indigo,
+          foregroundColor: Colors.white,
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(

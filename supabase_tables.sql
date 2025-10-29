@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS public.reservations (
   trip_id uuid REFERENCES public.company_schedules(id) ON DELETE CASCADE,
   passenger_id uuid REFERENCES public.pasajeros(id) ON DELETE CASCADE,
   seats_reserved int DEFAULT 1,
+  seat_numbers TEXT[] DEFAULT '{}', -- Array de números de asientos específicos
   total_price numeric,
   status text DEFAULT 'pending' CHECK(status IN('pending','confirmed','cancelled')),
   created_at timestamp DEFAULT now()

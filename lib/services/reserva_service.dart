@@ -30,6 +30,7 @@ class ReservaService {
         'trip_id': reserva.viajeId,
         'passenger_id': pasajeroId, // Usar el ID del pasajero válido
         'seats_reserved': reserva.numeroAsientos,
+        'seat_numbers': reserva.asientosSeleccionados, // Guardar números específicos de asientos
         'total_price': reserva.precioFinal,
         'status': _mapearEstado(reserva.estado),
       };
@@ -68,10 +69,24 @@ class ReservaService {
   // Obtener reservas por usuario
   Future<List<ReservaModel>> obtenerReservasPorUsuario(String usuarioId) async {
     try {
+      // Primero obtener el passenger_id del usuario
+      final pasajero = await _supabase
+          .from('pasajeros')
+          .select('id')
+          .eq('user_id', usuarioId)
+          .maybeSingle();
+
+      if (pasajero == null) {
+        return []; // No hay pasajero registrado, retornar lista vacía
+      }
+
+      final passengerId = pasajero['id'];
+
+      // Ahora buscar las reservas por passenger_id
       final response = await _supabase
           .from('reservations')
           .select('*')
-          .eq('passenger_id', usuarioId)
+          .eq('passenger_id', passengerId)
           .order('created_at', ascending: false);
 
       return response.map<ReservaModel>((json) {
@@ -217,6 +232,15 @@ class ReservaService {
   }
 
   ReservaModel _convertirReservaDesdeSQL(Map<String, dynamic> json) {
+    // Convertir seat_numbers de array a lista de strings
+    List<String> asientosSeleccionados = [];
+    if (json['seat_numbers'] != null) {
+      final seatNumbers = json['seat_numbers'] as List<dynamic>?;
+      if (seatNumbers != null) {
+        asientosSeleccionados = seatNumbers.map((s) => s.toString()).toList();
+      }
+    }
+
     return ReservaModel(
       id: json['id'],
       viajeId: json['trip_id'],
@@ -227,7 +251,7 @@ class ReservaService {
       documentoPasajero: '', // No está en la tabla SQL
       emailPasajero: '', // No está en la tabla SQL
       numeroAsientos: json['seats_reserved'] ?? 1,
-      asientosSeleccionados: [], // No está en la tabla SQL
+      asientosSeleccionados: asientosSeleccionados,
       precioTotal: (json['total_price'] ?? 0.0).toDouble(),
       precioFinal: (json['total_price'] ?? 0.0).toDouble(),
       descuento: null,
@@ -267,12 +291,69 @@ class ReservaService {
   }
 
   Future<void> _actualizarAsientosDisponibles(String viajeId, int asientosReservados) async {
-    // Este método podría actualizar una tabla de viajes si existe
-    // Por ahora, solo registramos la reserva en la tabla reservations
+    try {
+      // Obtener los asientos disponibles actuales
+      final viaje = await _supabase
+          .from('company_schedules')
+          .select('available_seats')
+          .eq('id', viajeId)
+          .single();
+
+      final asientosActuales = viaje['available_seats'] as int;
+      final nuevosAsientosDisponibles = asientosActuales - asientosReservados;
+
+      // Actualizar los asientos disponibles
+      await _supabase
+          .from('company_schedules')
+          .update({'available_seats': nuevosAsientosDisponibles})
+          .eq('id', viajeId);
+    } catch (e) {
+      throw Exception('Error al actualizar asientos disponibles: $e');
+    }
   }
 
   Future<void> _liberarAsientos(String viajeId, int asientosALiberar) async {
-    // Este método podría actualizar una tabla de viajes si existe
-    // Por ahora, la cancelación se maneja cambiando el estado de la reserva
+    try {
+      // Obtener los asientos disponibles actuales
+      final viaje = await _supabase
+          .from('company_schedules')
+          .select('available_seats')
+          .eq('id', viajeId)
+          .single();
+
+      final asientosActuales = viaje['available_seats'] as int;
+      final nuevosAsientosDisponibles = asientosActuales + asientosALiberar;
+
+      // Actualizar los asientos disponibles
+      await _supabase
+          .from('company_schedules')
+          .update({'available_seats': nuevosAsientosDisponibles})
+          .eq('id', viajeId);
+    } catch (e) {
+      throw Exception('Error al liberar asientos: $e');
+    }
+  }
+
+  // Obtener asientos ocupados específicos por viaje
+  Future<List<String>> obtenerAsientosOcupados(String viajeId) async {
+    try {
+      final response = await _supabase
+          .from('reservations')
+          .select('seat_numbers')
+          .eq('trip_id', viajeId)
+          .eq('status', 'confirmed');
+
+      List<String> asientosOcupados = [];
+      for (final reserva in response) {
+        final seatNumbers = reserva['seat_numbers'] as List<dynamic>?;
+        if (seatNumbers != null) {
+          asientosOcupados.addAll(seatNumbers.map((s) => s.toString()));
+        }
+      }
+
+      return asientosOcupados;
+    } catch (e) {
+      throw Exception('Error al obtener asientos ocupados: $e');
+    }
   }
 }

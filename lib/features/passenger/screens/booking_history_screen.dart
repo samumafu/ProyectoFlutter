@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../../models/booking.dart';
 import '../../../models/reserva_model.dart';
 import '../../../services/booking_service.dart';
 import '../../../services/reserva_service.dart';
+import '../../../controllers/auth_controller.dart';
 import 'route_map_screen.dart';
 import '../../../services/route_tracing_service.dart';
 
@@ -36,7 +38,15 @@ class _BookingHistoryScreenState extends State<BookingHistoryScreen> {
       
       // Cargar reservas de Supabase (ReservaService)
       final reservaService = ReservaService();
-      final reservas = await reservaService.obtenerReservasPorPasajero('current_user_id'); // TODO: Obtener ID del usuario actual
+      
+      // Obtener el ID del usuario autenticado
+      final authController = Provider.of<AuthController>(context, listen: false);
+      final currentUser = authController.user;
+      
+      List<ReservaModel> reservas = [];
+      if (currentUser != null) {
+        reservas = await reservaService.obtenerReservasPorUsuario(currentUser.id);
+      }
       
       setState(() {
         _bookings = bookings;
