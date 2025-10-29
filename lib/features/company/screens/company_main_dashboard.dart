@@ -594,7 +594,7 @@ class _CompanyMainDashboardState extends State<CompanyMainDashboard>
     final authController = context.read<AuthController>();
     await authController.signOut();
     if (mounted) {
-      Navigator.pushReplacementNamed(context, '/login');
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
     }
   }
 }

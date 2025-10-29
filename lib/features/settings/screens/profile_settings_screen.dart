@@ -57,9 +57,10 @@ class ProfileSettingsScreen extends StatelessWidget {
                 onPressed: () async {
                   await auth.signOut();
                   if (context.mounted) {
-                    Navigator.pushReplacement(
+                    Navigator.pushNamedAndRemoveUntil(
                       context,
-                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      '/',
+                      (route) => false,
                     );
                   }
                 },

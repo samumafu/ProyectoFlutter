@@ -291,7 +291,9 @@ class AuthController extends ChangeNotifier {
   // Obtener ruta según el rol del usuario
   String getRouteByRole() {
     if (!isAuthenticated || userProfile == null) {
-      return '/login';
+      // Si no hay sesión activa o no hay perfil cargado,
+      // dirige a la pantalla de bienvenida en lugar de login.
+      return '/';
     }
 
     switch (userProfile!.role) {
@@ -304,7 +306,8 @@ class AuthController extends ChangeNotifier {
       case UserRole.admin:
         return '/admin-dashboard';
       default:
-        return '/login';
+        // En cualquier caso no contemplado, regresar a Bienvenida.
+        return '/';
     }
   }
 }

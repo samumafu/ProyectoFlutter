@@ -69,6 +69,13 @@ class _RouteManagementScreenState extends State<RouteManagementScreen> {
         foregroundColor: Colors.white,
         actions: [
           IconButton(
+            onPressed: () {
+              Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+            },
+            icon: const Icon(Icons.arrow_back),
+            tooltip: 'Regresar',
+          ),
+          IconButton(
             onPressed: _showAddRouteDialog,
             icon: const Icon(Icons.add),
             tooltip: 'Agregar nueva ruta',

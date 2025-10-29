@@ -113,10 +113,7 @@ class _ProfileScreen extends StatelessWidget {
             onPressed: () async {
               await SupabaseService().signOut();
               if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
+                Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
               }
             },
             icon: const Icon(Icons.logout),
