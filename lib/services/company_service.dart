@@ -62,9 +62,9 @@ class CompanyService {
       );
 
       if (response.user != null) {
-        // Crear registro de empresa
-        final company = Company(
-          id: response.user!.id,
+        // Preparar registro de empresa SIN forzar el id
+        final tempCompany = Company(
+          id: '', // será generado por la BD
           name: name,
           email: email,
           phone: phone,
@@ -75,14 +75,35 @@ class CompanyService {
           updatedAt: DateTime.now(),
         );
 
-        await createCompany(company);
+        final createdCompany = await createCompany(tempCompany);
 
-        return {
-          'success': true,
-          'user': response.user,
-          'company': company,
-          'message': 'Empresa registrada exitosamente'
-        };
+        if (createdCompany != null) {
+          return {
+            'success': true,
+            'user': response.user,
+            'company': createdCompany,
+            'message': 'Empresa registrada exitosamente'
+          };
+        } else {
+          // Intentar recuperar empresa existente por NIT o email (duplicado)
+          final existingByNit = await getCompanyByNit(nit);
+          final existingByEmail = await getCompanyByEmail(email);
+          final existingCompany = existingByNit ?? existingByEmail;
+
+          if (existingCompany != null) {
+            return {
+              'success': true,
+              'user': response.user,
+              'company': existingCompany,
+              'message': 'Empresa ya existente vinculada correctamente'
+            };
+          }
+
+          return {
+            'success': false,
+            'message': 'No se pudo crear ni recuperar la empresa'
+          };
+        }
       }
 
       return {
@@ -90,6 +111,22 @@ class CompanyService {
         'message': 'Error al crear la cuenta'
       };
     } catch (e) {
+      final msg = e.toString();
+      // Si el usuario ya existe (422), intentar iniciar sesión y devolver empresa
+      if (msg.contains('422') || msg.toLowerCase().contains('already') || msg.toLowerCase().contains('exists')) {
+        try {
+          final signin = await signInCompany(email, password);
+          if (signin['success'] == true) {
+            return {
+              'success': true,
+              'user': signin['user'],
+              'company': signin['company'],
+              'message': 'Cuenta existente, sesión iniciada y empresa recuperada'
+            };
+          }
+        } catch (_) {}
+      }
+
       return {
         'success': false,
         'message': 'Error al registrar empresa: ${e.toString()}'
@@ -100,15 +137,28 @@ class CompanyService {
   // CRUD Operaciones para Company
   static Future<Company?> createCompany(Company company) async {
     try {
+      // Construir payload sin el id para permitir que la BD lo genere
+      final data = Map<String, dynamic>.from(company.toJson());
+      data.remove('id');
+
       final response = await _supabase
           .from('companies')
-          .insert(company.toJson())
+          .insert(data)
           .select()
           .maybeSingle();
 
       return response != null ? Company.fromJson(response) : null;
     } catch (e) {
+      // Si hay conflicto por NIT, intentar recuperar la empresa existente
+      final msg = e.toString();
       print('Error creating company: $e');
+      if (msg.contains('companies_nit_key') || msg.contains('duplicate key value')) {
+        try {
+          // Recuperar por NIT si hay conflicto
+          final existing = await getCompanyByNit(company.nit);
+          if (existing != null) return existing;
+        } catch (_) {}
+      }
       return null;
     }
   }
@@ -141,6 +191,22 @@ class CompanyService {
       return Company.fromJson(response);
     } catch (e) {
       print('Error getting company by email: $e');
+      return null;
+    }
+  }
+
+  static Future<Company?> getCompanyByNit(String nit) async {
+    try {
+      final response = await _supabase
+          .from('companies')
+          .select()
+          .eq('nit', nit)
+          .maybeSingle();
+
+      if (response == null) return null;
+      return Company.fromJson(response);
+    } catch (e) {
+      print('Error getting company by nit: $e');
       return null;
     }
   }

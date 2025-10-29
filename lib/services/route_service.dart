@@ -173,6 +173,30 @@ class RouteService {
       print('   Precio: \$${price}');
       print('   Asientos: $totalSeats');
 
+      // Verificar si la empresa existe, con reintento para empresas recién registradas
+      bool companyExists = await _verifyCompanyExists(companyId);
+      
+      if (!companyExists) {
+        print('⚠️ Company ID no encontrado, reintentando en 2 segundos...');
+        await Future.delayed(const Duration(seconds: 2));
+        companyExists = await _verifyCompanyExists(companyId);
+        
+        if (!companyExists) {
+          // Verificar si el usuario está autenticado y el company_id coincide con el user_id
+          final currentUser = _supabase.auth.currentUser;
+          if (currentUser != null && currentUser.id == companyId) {
+            print('⚠️ Company ID no encontrado en tabla, pero usuario autenticado coincide. Permitiendo creación...');
+            companyExists = true;
+          } else {
+            print('❌ Company ID "$companyId" no existe en la tabla companies después del reintento');
+            print('💡 Usuario actual: ${currentUser?.id ?? "No autenticado"}');
+            return false;
+          }
+        }
+      }
+
+      print('✅ Company ID verificado, procediendo con la creación de la ruta');
+
       await _supabase.from('company_schedules').insert({
         'company_id': companyId,
         'origin': origin,
@@ -192,6 +216,48 @@ class RouteService {
       return true;
     } catch (e) {
       print('❌ Error creando ruta: $e');
+      
+      // Si el error es de clave foránea, proporcionar un mensaje más claro
+      if (e.toString().contains('foreign key') || e.toString().contains('violates')) {
+        print('💡 Sugerencia: Asegúrate de que la empresa esté completamente registrada antes de crear rutas');
+      }
+      
+      return false;
+    }
+  }
+
+  // Función auxiliar para verificar si una empresa existe
+  static Future<bool> _verifyCompanyExists(String companyId) async {
+    try {
+      print('🔍 Verificando existencia de company_id: $companyId');
+      
+      final response = await _supabase
+          .from('companies')
+          .select('id, name, is_active')
+          .eq('id', companyId)
+          .maybeSingle();
+      
+      if (response != null) {
+        print('✅ Empresa encontrada: ${response['name']} (activa: ${response['is_active']})');
+        return true;
+      } else {
+        print('❌ No se encontró empresa con ID: $companyId');
+        
+        // Mostrar algunas empresas existentes para depuración
+        final allCompanies = await _supabase
+            .from('companies')
+            .select('id, name')
+            .limit(5);
+        
+        print('📋 Empresas existentes en la tabla:');
+        for (var company in allCompanies) {
+          print('   - ${company['id']}: ${company['name']}');
+        }
+        
+        return false;
+      }
+    } catch (e) {
+      print('❌ Error verificando empresa: $e');
       return false;
     }
   }
