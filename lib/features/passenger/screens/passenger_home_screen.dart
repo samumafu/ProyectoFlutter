@@ -9,6 +9,7 @@ import 'edit_profile_screen.dart';
 import 'favorite_routes_screen.dart';
 import 'payment_methods_screen.dart';
 import 'help_support_screen.dart';
+import '../../settings/screens/profile_settings_screen.dart';
 
 class PassengerHomeScreen extends StatefulWidget {
   const PassengerHomeScreen({super.key});
@@ -784,7 +785,12 @@ class ProfileTab extends StatelessWidget {
                     title: const Text('Historial de Viajes'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () {
-                      // Ya existe la navegación al historial
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const BookingHistoryScreen(),
+                        ),
+                      );
                     },
                   ),
                   const Divider(height: 1),
@@ -821,7 +827,12 @@ class ProfileTab extends StatelessWidget {
                     title: const Text('Configuración'),
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () {
-                      // TODO: Implementar pantalla de configuración
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ProfileSettingsScreen(),
+                        ),
+                      );
                     },
                   ),
                 ],

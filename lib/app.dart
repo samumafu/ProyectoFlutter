@@ -6,6 +6,7 @@ import 'features/auth/screens/login_screen.dart';
 import 'features/auth/screens/welcome_screen.dart';
 import 'features/company/screens/dashboard_screen.dart';
 import 'features/driver/screens/profile_screen.dart';
+import 'features/settings/screens/profile_settings_screen.dart';
 import 'features/passenger/controllers/ticket_search_controller.dart';
 import 'controllers/auth_controller.dart';
 
@@ -46,6 +47,7 @@ class TuFlotaApp extends StatelessWidget {
           '/passenger-home': (context) => const PassengerHomeScreen(),
           '/company-dashboard': (context) => const CompanyDashboardScreen(),
           '/driver-home': (context) => const DriverProfileScreen(),
+          '/profile-settings': (context) => const ProfileSettingsScreen(),
           '/admin-dashboard': (context) => const PassengerHomeScreen(), // Temporal hasta crear admin
         },
         initialRoute: '/',

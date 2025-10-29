@@ -127,6 +127,14 @@ class _ProfileScreen extends StatelessWidget {
               minimumSize: const Size(double.infinity, 50),
             ),
           ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(context, '/profile-settings');
+            },
+            icon: const Icon(Icons.settings, color: Colors.indigo),
+            label: const Text('Ajustes de perfil'),
+          ),
         ],
       ),
     );

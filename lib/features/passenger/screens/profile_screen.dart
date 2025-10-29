@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../features/auth/screens/login_screen.dart';
+import 'booking_history_screen.dart';
 
 class PassengerProfileScreen extends StatefulWidget {
   const PassengerProfileScreen({super.key});
@@ -15,7 +16,7 @@ class _PassengerProfileScreenState extends State<PassengerProfileScreen> {
 
   final List<Widget> _pages = const [
     _SearchTripsScreen(),
-    _HistoryScreen(),
+    BookingHistoryScreen(),
     _FavoritesScreen(),
     _ProfileScreen(),
   ];
@@ -131,37 +132,98 @@ class _ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final user = SupabaseService().currentUser;
 
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.person, size: 90, color: Colors.indigo),
-          const SizedBox(height: 16),
-          Text(
-            user?.email ?? 'Sin correo',
-            style: const TextStyle(fontSize: 18),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: () async {
-              await SupabaseService().signOut();
-              if (context.mounted) {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
-                );
-              }
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Cerrar sesión'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.indigo,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 50),
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Center(child: Icon(Icons.person, size: 90, color: Colors.indigo)),
+            const SizedBox(height: 16),
+            Center(
+              child: Text(
+                user?.email ?? 'Sin correo',
+                style: const TextStyle(fontSize: 18),
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await SupabaseService().signOut();
+                if (context.mounted) {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  );
+                }
+              },
+              icon: const Icon(Icons.logout),
+              label: const Text('Cerrar sesión'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.indigo,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 50),
+              ),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pushNamed(context, '/profile-settings');
+              },
+              icon: const Icon(Icons.settings, color: Colors.indigo),
+              label: const Text('Ajustes de perfil'),
+            ),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 8),
+            const Text(
+              'Opciones del perfil',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.history, color: Colors.indigo),
+              title: const Text('Historial de viajes'),
+              subtitle: const Text('Consulta tus reservas y viajes'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const BookingHistoryScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.payment, color: Colors.indigo),
+              title: const Text('Métodos de pago'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Próximamente')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.help_outline, color: Colors.indigo),
+              title: const Text('Ayuda y soporte'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Próximamente')),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings, color: Colors.indigo),
+              title: const Text('Configuración'),
+              subtitle: const Text('Gestiona login y ajustes de cuenta'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Navigator.pushNamed(context, '/profile-settings');
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
