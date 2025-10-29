@@ -9,6 +9,7 @@ class AuthController extends ChangeNotifier {
   SimpleUserModel? _userProfile;
   bool _isLoading = false;
   String? _errorMessage;
+  Map<String, dynamic>? _passengerInfo;
 
   // Getters
   User? get user => _user;
@@ -16,6 +17,9 @@ class AuthController extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _user != null;
+  String get passengerPhone => (_passengerInfo?['phone'] as String?) ?? '';
+  double get passengerRating =>
+      (_passengerInfo?['rating'] is num) ? (_passengerInfo!['rating'] as num).toDouble() : 0.0;
 
   // Getters de roles
   bool get isEmpresa => _userProfile?.isEmpresa ?? false;
@@ -54,6 +58,8 @@ class AuthController extends ChangeNotifier {
     try {
       final profile = await AuthService.getCurrentUserProfile();
       _userProfile = profile;
+      // Cargar info adicional del pasajero (teléfono y rating)
+      _passengerInfo = await AuthService.getPassengerInfo();
       notifyListeners();
     } catch (e) {
       _errorMessage = 'Error al cargar perfil: $e';

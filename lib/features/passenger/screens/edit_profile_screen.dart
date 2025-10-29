@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../controllers/auth_controller.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -9,9 +11,23 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController(text: 'Juan Pérez');
-  final _phoneController = TextEditingController(text: '+57 300 123 4567');
-  final _emailController = TextEditingController(text: 'juan.perez@email.com');
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _emailController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Cargar datos reales del usuario
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = Provider.of<AuthController>(context, listen: false);
+      final user = auth.userProfile;
+      _emailController.text = user?.email ?? '';
+      // Nombre: usar prefijo del email si no hay otro campo
+      _nameController.text = user != null ? user.email.split('@').first : '';
+      _phoneController.text = auth.passengerPhone;
+    });
+  }
 
   @override
   void dispose() {

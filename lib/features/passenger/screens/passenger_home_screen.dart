@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../controllers/auth_controller.dart';
 import 'package:intl/intl.dart';
 import '../../../data/constants/narino_destinations.dart';
 import '../../../data/popular_routes_manager.dart';
@@ -562,6 +564,14 @@ class ProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final auth = Provider.of<AuthController>(context);
+    final user = auth.userProfile;
+    final displayName = user != null
+        ? (user.email.split('@').first)
+        : 'Usuario';
+    final email = user?.email ?? '';
+    final phone = auth.passengerPhone.isNotEmpty ? auth.passengerPhone : '';
+    final rating = auth.passengerRating;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Mi Perfil'),
@@ -601,29 +611,30 @@ class ProfileTab extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Juan Pérez',
-                      style: TextStyle(
+                    Text(
+                      displayName,
+                      style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      'juan.perez@email.com',
-                      style: TextStyle(
+                    Text(
+                      email,
+                      style: const TextStyle(
                         fontSize: 16,
                         color: Colors.grey,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    const Text(
-                      '+57 300 123 4567',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
+                    if (phone.isNotEmpty)
+                      Text(
+                        phone,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.grey,
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -659,20 +670,19 @@ class ProfileTab extends StatelessWidget {
                               const SizedBox(height: 8),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  ...List.generate(5, (index) {
-                                    return Icon(
-                                      index < 4 ? Icons.star : Icons.star_border,
-                                      color: Colors.amber,
-                                      size: 20,
-                                    );
-                                  }),
-                                ],
+                                children: List.generate(5, (index) {
+                                  final filled = rating >= index + 1;
+                                  return Icon(
+                                    filled ? Icons.star : Icons.star_border,
+                                    color: Colors.amber,
+                                    size: 20,
+                                  );
+                                }),
                               ),
                               const SizedBox(height: 4),
-                              const Text(
-                                '4.2 (15 viajes)',
-                                style: TextStyle(
+                              Text(
+                                rating > 0 ? '${rating.toStringAsFixed(1)}' : 'Sin calificaciones',
+                                style: const TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey,
                                 ),
@@ -680,48 +690,7 @@ class ProfileTab extends StatelessWidget {
                             ],
                           ),
                         ),
-                        Container(
-                          width: 1,
-                          height: 60,
-                          color: Colors.grey.shade300,
-                        ),
-                        Expanded(
-                          child: Column(
-                            children: [
-                              const Text(
-                                'Como Conductor',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Sin calificaciones',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              ElevatedButton(
-                                onPressed: () {
-                                  // TODO: Implementar registro como conductor
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 4,
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Ser Conductor',
-                                  style: TextStyle(fontSize: 12),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                        // Se elimina sección "Como Conductor"
                       ],
                     ),
                   ],

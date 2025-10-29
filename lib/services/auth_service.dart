@@ -246,4 +246,23 @@ class AuthService {
       return null;
     }
   }
+
+  // Obtener información de pasajero si el usuario es pasajero
+  static Future<Map<String, dynamic>?> getPassengerInfo() async {
+    try {
+      final user = currentUser;
+      if (user == null) return null;
+
+      // Consultar tabla 'pasajeros' enlazada por user_id
+      final response = await _supabase
+          .from('pasajeros')
+          .select()
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+      return response;
+    } catch (e) {
+      return null;
+    }
+  }
 }
