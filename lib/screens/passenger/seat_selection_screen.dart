@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../models/schedule_model.dart';
 import '../../models/vehicle_model.dart';
 import '../../data/routes_data.dart';
@@ -8,6 +9,8 @@ import '../../features/passenger/screens/route_map_screen.dart';
 import '../../services/route_tracing_service.dart';
 import '../../models/booking.dart';
 import '../../services/booking_service.dart';
+import '../../controllers/auth_controller.dart';
+import '../../features/auth/screens/login_screen.dart';
 
 class SeatSelectionScreen extends StatefulWidget {
   final Schedule schedule;
@@ -310,15 +313,18 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
                 
                 final isAvailable = widget.schedule.availableSeats.contains(seatId);
                 final isSelected = selectedSeats.contains(seatId);
-                final isOccupied = !isAvailable && !isSelected;
+                final isOccupied = widget.schedule.reservedSeats.contains(seatId);
                 
                 Color seatColor;
                 if (isSelected) {
                   seatColor = Colors.blue;
                 } else if (isOccupied) {
                   seatColor = Colors.red;
-                } else {
+                } else if (isAvailable) {
                   seatColor = Colors.green;
+                } else {
+                  // Asiento no disponible por otras razones
+                  seatColor = Colors.grey;
                 }
                 
                 return GestureDetector(
@@ -450,6 +456,24 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
   }
 
   void _confirmBooking() async {
+    // Verificar autenticación antes de proceder
+    final authController = Provider.of<AuthController>(context, listen: false);
+    final currentUser = authController.currentUser;
+    
+    if (currentUser == null) {
+      // Usuario no autenticado, redirigir al login
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+      
+      // Si el usuario se autenticó exitosamente, intentar la reserva nuevamente
+      if (result == true) {
+        _confirmBooking();
+      }
+      return;
+    }
+
     // Crear la reserva
     final booking = Booking(
       id: BookingService.generateBookingId(),

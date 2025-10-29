@@ -3,15 +3,22 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'features/passenger/screens/passenger_home_screen.dart';
 import 'features/auth/screens/login_screen.dart';
+import 'features/auth/screens/welcome_screen.dart';
+import 'features/company/screens/dashboard_screen.dart';
+import 'features/driver/screens/profile_screen.dart';
 import 'features/passenger/controllers/ticket_search_controller.dart';
+import 'controllers/auth_controller.dart';
 
 class TuFlotaApp extends StatelessWidget {
   const TuFlotaApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => TicketSearchController()..initializeSampleData(),
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => TicketSearchController()..initializeSampleData()),
+        ChangeNotifierProvider(create: (context) => AuthController()),
+      ],
       child: MaterialApp(
         title: 'TuFlota',
         theme: ThemeData(
@@ -33,29 +40,17 @@ class TuFlotaApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const _RootNavigator(),
+        routes: {
+          '/': (context) => const WelcomeScreen(),
+          '/login': (context) => const LoginScreen(),
+          '/passenger-home': (context) => const PassengerHomeScreen(),
+          '/company-dashboard': (context) => const CompanyDashboardScreen(),
+          '/driver-home': (context) => const DriverProfileScreen(),
+          '/admin-dashboard': (context) => const PassengerHomeScreen(), // Temporal hasta crear admin
+        },
+        initialRoute: '/',
         debugShowCheckedModeBanner: false,
       ),
-    );
-  }
-}
-
-class _RootNavigator extends StatelessWidget {
-  const _RootNavigator();
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: Supabase.instance.client.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        final session = snapshot.hasData ? snapshot.data!.session : null;
-        
-        if (session != null) {
-          return const PassengerHomeScreen();
-        } else {
-          return const LoginScreen();
-        }
-      },
     );
   }
 }

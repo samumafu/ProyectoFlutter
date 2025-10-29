@@ -4,8 +4,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import '../../../data/models/ticket_model.dart';
 import '../../../data/popular_routes_manager.dart';
+import '../../../data/routes_data.dart';
 import '../../../models/reserva_model.dart';
 import '../../../controllers/auth_controller.dart';
+import '../../auth/screens/login_screen.dart';
 import 'seat_selection_screen.dart';
 import 'chat_screen.dart';
 import 'driver_tracking_screen.dart';
@@ -764,12 +766,16 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
       final userProfile = authController.userProfile;
       
       if (currentUser == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Error: Usuario no autenticado'),
-            backgroundColor: Colors.red,
-          ),
+        // Usuario no autenticado, redirigir al login
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
         );
+        
+        // Si el usuario se autenticó exitosamente, intentar la reserva nuevamente
+        if (result == true) {
+          _confirmBooking(selectedSeats, totalPrice);
+        }
         return;
       }
 
@@ -782,8 +788,8 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
           viajeId: widget.ticket.id,
           usuarioId: currentUser.id, // ID real del usuario autenticado
           empresaId: widget.ticket.companyId ?? 'default_company',
-          nombrePasajero: userProfile?.nombres ?? 'Pasajero',
-          telefonoPasajero: userProfile?.telefono ?? '0000000000',
+          nombrePasajero: userProfile?.email.split('@')[0] ?? 'Pasajero',
+          telefonoPasajero: '0000000000', // Campo por defecto hasta implementar perfil completo
           numeroAsientos: _selectedPassengers,
           asientosSeleccionados: selectedSeats.map((s) => s.toString()).toList(),
           precioTotal: totalPrice,
@@ -849,22 +855,28 @@ class _TicketDetailScreenState extends State<TicketDetailScreen> {
   }
 
   void _openDriverTracking() {
-    // Coordenadas simuladas para origen y destino
-    final originCoords = LatLng(1.2136, -77.2811); // Pasto
-    final destinationCoords = LatLng(2.4448, -76.6147); // Popayán
+    // Obtener coordenadas reales basadas en el origen y destino del ticket
+    final originCoords = RoutesData.getDestinationCoordinates(widget.ticket.origin);
+    final destinationCoords = RoutesData.getDestinationCoordinates(widget.ticket.destination);
+    
+    // Usar coordenadas por defecto si no se encuentran las específicas
+    final defaultOrigin = originCoords ?? const LatLng(1.2136, -77.2811); // Pasto por defecto
+    final defaultDestination = destinationCoords ?? const LatLng(0.8317, -77.6439); // Ipiales por defecto
     
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => DriverTrackingScreen(
-          tripId: 'TRIP-${DateTime.now().millisecondsSinceEpoch}',
+          tripId: widget.ticket.id,
           driverName: 'Carlos Rodríguez',
           driverPhone: '+57 300 123 4567',
           vehiclePlate: 'ABC-123',
-          vehicleModel: 'Mercedes Sprinter',
-          origin: originCoords,
-          destination: destinationCoords,
+          vehicleModel: 'Mercedes Sprinter 2020',
+          origin: defaultOrigin,
+          destination: defaultDestination,
           estimatedArrival: '15-20 min',
+          originCityName: widget.ticket.origin,
+          destinationCityName: widget.ticket.destination,
         ),
       ),
     );

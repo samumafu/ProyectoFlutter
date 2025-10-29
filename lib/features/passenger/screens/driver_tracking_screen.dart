@@ -15,6 +15,8 @@ class DriverTrackingScreen extends StatefulWidget {
   final LatLng origin;
   final LatLng destination;
   final String estimatedArrival;
+  final String? originCityName;
+  final String? destinationCityName;
 
   const DriverTrackingScreen({
     Key? key,
@@ -26,6 +28,8 @@ class DriverTrackingScreen extends StatefulWidget {
     required this.origin,
     required this.destination,
     required this.estimatedArrival,
+    this.originCityName,
+    this.destinationCityName,
   }) : super(key: key);
 
   @override
@@ -69,12 +73,22 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
 
   Future<void> _loadRoute() async {
     try {
-      // Obtener nombres de ciudades desde las coordenadas
-      final originName = _getCityNameFromCoords(widget.origin);
-      final destinationName = _getCityNameFromCoords(widget.destination);
+      print('🗺️ Iniciando carga de ruta...');
+      print('📍 Origen: ${widget.origin}');
+      print('📍 Destino: ${widget.destination}');
+      
+      // Usar nombres de ciudades directos si están disponibles, sino detectar desde coordenadas
+      String? originName = widget.originCityName ?? _getCityNameFromCoords(widget.origin);
+      String? destinationName = widget.destinationCityName ?? _getCityNameFromCoords(widget.destination);
+      
+      print('🏙️ Ciudad origen: $originName (${widget.originCityName != null ? "directo" : "detectado"})');
+      print('🏙️ Ciudad destino: $destinationName (${widget.destinationCityName != null ? "directo" : "detectado"})');
       
       if (originName != null && destinationName != null) {
+        print('🚀 Solicitando ruta de $originName a $destinationName...');
         _routePoints = await RouteTracingService.traceRoute(originName, destinationName);
+        
+        print('📊 Puntos de ruta obtenidos: ${_routePoints.length}');
         
         if (_routePoints.isNotEmpty) {
           // Inicializar la posición del conductor en el 30% de la ruta
@@ -82,11 +96,20 @@ class _DriverTrackingScreenState extends State<DriverTrackingScreen>
           if (_currentRouteIndex < _routePoints.length) {
             _driverLocation = _routePoints[_currentRouteIndex];
           }
+          print('✅ Ruta cargada exitosamente con ${_routePoints.length} puntos');
           setState(() {});
+        } else {
+          print('⚠️ No se obtuvieron puntos de ruta, usando línea recta');
+          _routePoints = [widget.origin, widget.destination];
         }
+      } else {
+        print('❌ No se pudieron detectar las ciudades, usando línea recta');
+        print('   Origen detectado: $originName');
+        print('   Destino detectado: $destinationName');
+        _routePoints = [widget.origin, widget.destination];
       }
     } catch (e) {
-      print('Error cargando ruta: $e');
+      print('❌ Error cargando ruta: $e');
       // Fallback a la línea recta si hay error
       _routePoints = [widget.origin, widget.destination];
     }

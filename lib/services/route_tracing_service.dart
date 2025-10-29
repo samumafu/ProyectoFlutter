@@ -61,10 +61,16 @@ class RouteTracingService {
 
   /// Traza una ruta realista entre dos municipios siguiendo las vías principales
   static Future<List<LatLng>> traceRoute(String origin, String destination) async {
+    print('🚀 RouteTracingService.traceRoute iniciado: $origin -> $destination');
+    
     final originCoords = RoutesData.getDestinationCoordinates(origin);
     final destinationCoords = RoutesData.getDestinationCoordinates(destination);
     
+    print('📍 Coordenadas origen ($origin): $originCoords');
+    print('📍 Coordenadas destino ($destination): $destinationCoords');
+    
     if (originCoords == null || destinationCoords == null) {
+      print('❌ No se encontraron coordenadas para las ciudades');
       return [];
     }
 
@@ -72,29 +78,35 @@ class RouteTracingService {
     final cacheKey = _getCacheKey(origin, destination);
     final cachedRoute = await _loadRouteFromCache(cacheKey);
     if (cachedRoute != null) {
-      print('Ruta cargada desde cache: $origin -> $destination');
+      print('✅ Ruta cargada desde cache: $origin -> $destination (${cachedRoute.length} puntos)');
       return cachedRoute;
     }
 
     try {
+      print('🌐 Intentando obtener ruta real usando OSRM API...');
       // Intentar obtener ruta real usando OSRM API
       final realRoute = await _getRealRoute(originCoords, destinationCoords);
       if (realRoute.isNotEmpty) {
         // Guardar en cache para uso futuro
         await _saveRouteToCache(cacheKey, realRoute);
-        print('Ruta real obtenida de OSRM API y guardada en cache: $origin -> $destination');
+        print('✅ Ruta real obtenida de OSRM API y guardada en cache: $origin -> $destination (${realRoute.length} puntos)');
         return realRoute;
+      } else {
+        print('⚠️ OSRM API no devolvió puntos de ruta');
       }
     } catch (e) {
-      print('Error obteniendo ruta real: $e');
+      print('❌ Error obteniendo ruta real: $e');
     }
 
+    print('🔄 Usando ruta fallback...');
     // Fallback: usar el método anterior si la API falla
     final fallbackRoute = _getFallbackRoute(origin, destination, originCoords, destinationCoords);
     if (fallbackRoute.isNotEmpty) {
       // También guardar el fallback en cache
       await _saveRouteToCache(cacheKey, fallbackRoute);
-      print('Ruta fallback generada y guardada en cache: $origin -> $destination');
+      print('✅ Ruta fallback generada y guardada en cache: $origin -> $destination (${fallbackRoute.length} puntos)');
+    } else {
+      print('❌ Fallback también falló');
     }
     return fallbackRoute;
   }

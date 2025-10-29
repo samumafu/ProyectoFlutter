@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/user_model.dart';
+import '../models/simple_user_model.dart';
 
 class AuthService {
   static final SupabaseClient _supabase = Supabase.instance.client;
@@ -14,14 +14,7 @@ class AuthService {
   static Future<AuthResponse> signUpWithRole({
     required String email,
     required String password,
-    required String nombres,
-    required String apellidos,
-    required String cedula,
-    required UserRole rol,
-    String? telefono,
-    DateTime? fechaNacimiento,
-    String? direccion,
-    String? municipio,
+    required UserRole role,
   }) async {
     try {
       final response = await _supabase.auth.signUp(
@@ -30,22 +23,12 @@ class AuthService {
       );
 
       if (response.user != null) {
-        // Crear perfil de usuario en la tabla usuarios
-        await _supabase.from('usuarios').insert({
+        // Crear perfil de usuario en la tabla users
+        await _supabase.from('users').insert({
           'id': response.user!.id,
           'email': email,
-          'rol': rol.name,
-          'nombres': nombres,
-          'apellidos': apellidos,
-          'cedula': cedula,
-          'telefono': telefono,
-          'fecha_nacimiento': fechaNacimiento?.toIso8601String().split('T')[0],
-          'direccion': direccion,
-          'municipio': municipio,
-          'departamento': 'Nariño',
-          'estado': UserStatus.activo.name,
-          'email_verificado': false,
-          'telefono_verificado': false,
+          'role': role.name,
+          'password_hash': 'supabase_managed', // Supabase maneja las contraseñas
         });
       }
 
@@ -80,18 +63,18 @@ class AuthService {
   }
 
   // Obtener perfil completo del usuario actual
-  static Future<UserModel?> getCurrentUserProfile() async {
+  static Future<SimpleUserModel?> getCurrentUserProfile() async {
     try {
       final user = currentUser;
       if (user == null) return null;
 
       final response = await _supabase
-          .from('usuarios')
+          .from('users')
           .select()
           .eq('id', user.id)
           .maybeSingle();
 
-      return response != null ? UserModel.fromJson(response) : null;
+      return response != null ? SimpleUserModel.fromJson(response) : null;
     } catch (e) {
       return null;
     }
@@ -101,7 +84,7 @@ class AuthService {
   static Future<bool> hasRole(UserRole role) async {
     try {
       final userProfile = await getCurrentUserProfile();
-      return userProfile?.rol == role;
+      return userProfile?.role == role;
     } catch (e) {
       return false;
     }
@@ -119,7 +102,7 @@ class AuthService {
 
   // Verificar si es usuario regular
   static Future<bool> isUsuario() async {
-    return await hasRole(UserRole.usuario);
+    return await hasRole(UserRole.pasajero);
   }
 
   // Verificar si es admin

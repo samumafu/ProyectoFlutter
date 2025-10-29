@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../controllers/company_controller.dart';
 import 'company_register_screen.dart';
 import 'company_dashboard_screen.dart';
+import 'route_management_screen.dart';
 
 class CompanyLoginScreen extends StatefulWidget {
   const CompanyLoginScreen({Key? key}) : super(key: key);
@@ -37,11 +38,17 @@ class _CompanyLoginScreenState extends State<CompanyLoginScreen> {
     if (!mounted) return; // Verificar si el widget sigue montado
 
     if (success) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => const CompanyDashboardScreen(),
-        ),
-      );
+      final company = controller.currentCompany;
+      if (company != null) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => RouteManagementScreen(
+              companyId: company.id,
+              companyName: company.name,
+            ),
+          ),
+        );
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

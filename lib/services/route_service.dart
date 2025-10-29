@@ -205,7 +205,7 @@ class RouteService {
       print('🔍 Verificando existencia de company_id: $companyId');
 
       final response = await _supabase
-          .from('empresas')
+          .from('companies')
           .select('id, name')
           .eq('id', companyId)
           .maybeSingle();

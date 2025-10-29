@@ -46,7 +46,7 @@ class UserModel {
   bool get isActive => estado == UserStatus.activo;
   bool get isEmpresa => rol == UserRole.empresa;
   bool get isConductor => rol == UserRole.conductor;
-  bool get isUsuario => rol == UserRole.usuario;
+  bool get isUsuario => rol == UserRole.pasajero;
   bool get isAdmin => rol == UserRole.admin;
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -55,7 +55,7 @@ class UserModel {
       email: json['email'] as String,
       rol: UserRole.values.firstWhere(
         (e) => e.name == json['rol'],
-        orElse: () => UserRole.usuario,
+        orElse: () => UserRole.pasajero,
       ),
       nombres: json['nombres'] as String,
       apellidos: json['apellidos'] as String,

@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../models/simple_user_model.dart';
 
 class AuthController extends ChangeNotifier {
   // Estado de autenticación
   User? _user;
-  UserModel? _userProfile;
+  SimpleUserModel? _userProfile;
   bool _isLoading = false;
-  String _errorMessage = '';
+  String? _errorMessage;
 
   // Getters
   User? get user => _user;
-  UserModel? get userProfile => _userProfile;
+  SimpleUserModel? get userProfile => _userProfile;
   bool get isLoading => _isLoading;
-  String get errorMessage => _errorMessage;
+  String? get errorMessage => _errorMessage;
   bool get isAuthenticated => _user != null;
 
   // Getters de roles
@@ -61,18 +61,11 @@ class AuthController extends ChangeNotifier {
     }
   }
 
-  // Registrar usuario
+  // Registro de usuario
   Future<bool> signUp({
     required String email,
     required String password,
-    required String nombres,
-    required String apellidos,
-    required String cedula,
-    required UserRole rol,
-    String? telefono,
-    DateTime? fechaNacimiento,
-    String? direccion,
-    String? municipio,
+    required UserRole role,
   }) async {
     try {
       _isLoading = true;
@@ -82,18 +75,13 @@ class AuthController extends ChangeNotifier {
       final response = await AuthService.signUpWithRole(
         email: email,
         password: password,
-        nombres: nombres,
-        apellidos: apellidos,
-        cedula: cedula,
-        rol: rol,
-        telefono: telefono,
-        fechaNacimiento: fechaNacimiento,
-        direccion: direccion,
-        municipio: municipio,
+        role: role,
       );
 
       if (response.user != null) {
+        _user = response.user;
         await _loadUserProfile();
+        notifyListeners();
         return true;
       }
       return false;
@@ -261,7 +249,17 @@ class AuthController extends ChangeNotifier {
 
   // Limpiar mensaje de error
   void clearError() {
-    _errorMessage = '';
+    _errorMessage = null;
+    notifyListeners();
+  }
+
+  void _setError(String error) {
+    _errorMessage = error;
+    notifyListeners();
+  }
+
+  void _clearError() {
+    _errorMessage = null;
     notifyListeners();
   }
 
@@ -290,15 +288,17 @@ class AuthController extends ChangeNotifier {
       return '/login';
     }
 
-    switch (userProfile!.rol) {
-      case UserRole.usuario:
+    switch (userProfile!.role) {
+      case UserRole.pasajero:
         return '/passenger-home';
       case UserRole.conductor:
-        return '/driver-dashboard';
+        return '/driver-home';
       case UserRole.empresa:
         return '/company-dashboard';
       case UserRole.admin:
         return '/admin-dashboard';
+      default:
+        return '/login';
     }
   }
 }

@@ -33,6 +33,10 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
       // Obtener asientos ocupados desde la base de datos
       final asientosOcupados = await _reservaService.obtenerAsientosOcupados(widget.ticket.id);
       
+      print('DEBUG: Ticket ID: ${widget.ticket.id}');
+      print('DEBUG: Total seats: ${widget.ticket.totalSeats}');
+      print('DEBUG: Asientos ocupados: $asientosOcupados');
+      
       // Inicializar estados de asientos
       seatStatuses = List.generate(widget.ticket.totalSeats, (index) {
         final seatNumber = (index + 1).toString();
@@ -42,10 +46,14 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         return SeatStatus.available;
       });
       
+      print('DEBUG: Seat statuses initialized: ${seatStatuses.length} seats');
+      print('DEBUG: Occupied seats count: ${seatStatuses.where((s) => s == SeatStatus.occupied).length}');
+      
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
+      print('DEBUG: Error loading seats: $e');
       // En caso de error, usar datos simulados
       seatStatuses = List.generate(widget.ticket.totalSeats, (index) {
         // Simular algunos asientos ocupados como fallback
@@ -54,6 +62,8 @@ class _SeatSelectionScreenState extends State<SeatSelectionScreen> {
         }
         return SeatStatus.available;
       });
+      
+      print('DEBUG: Using fallback data with ${seatStatuses.where((s) => s == SeatStatus.occupied).length} occupied seats');
       
       setState(() {
         _isLoading = false;

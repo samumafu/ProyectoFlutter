@@ -31,22 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (success && context.mounted) {
-        final authController = Provider.of<AuthController>(context, listen: false);
-        final userProfile = authController.userProfile;
-        
-        Widget nextScreen;
-        if (userProfile?.isEmpresa == true) {
-          nextScreen = const CompanyDashboardScreen();
-        } else if (userProfile?.isConductor == true) {
-          nextScreen = const DriverProfileScreen();
-        } else {
-          nextScreen = const PassengerHomeScreen();
-        }
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => nextScreen),
-        );
+        // Login exitoso, retornar true para indicar éxito
+        Navigator.pop(context, true);
       } else if (!success) {
         final authController = Provider.of<AuthController>(context, listen: false);
         ScaffoldMessenger.of(context).showSnackBar(
