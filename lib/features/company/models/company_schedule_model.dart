@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart'; // Necesario para DateTime
 
 class CompanySchedule {
   final String id;
@@ -158,17 +159,23 @@ class Reservation {
   }
 }
 
+// --------------------------------------------------------------------------
+// CLASE ChatMessage CORREGIDA
+// --------------------------------------------------------------------------
 class ChatMessage {
   final String id;
   final String tripId;
   final String senderId;
   final String message;
+  // -> PROPIEDAD AÑADIDA
+  final DateTime? createdAt; 
 
   const ChatMessage({
     required this.id,
     required this.tripId,
     required this.senderId,
     required this.message,
+    this.createdAt, // -> AÑADIDA AL CONSTRUCTOR
   });
 
   factory ChatMessage.fromMap(Map<String, dynamic> map) {
@@ -177,6 +184,10 @@ class ChatMessage {
       tripId: map['trip_id'] as String,
       senderId: map['sender_id'] as String,
       message: map['message'] as String,
+      // -> LÓGICA AÑADIDA PARA PARSEAR EL TIMESTAMP
+      createdAt: map['created_at'] != null 
+          ? DateTime.parse(map['created_at'] as String) 
+          : null,
     );
   }
 
@@ -186,6 +197,7 @@ class ChatMessage {
       'trip_id': tripId,
       'sender_id': senderId,
       'message': message,
+      'created_at': createdAt?.toIso8601String(),
     };
   }
 }

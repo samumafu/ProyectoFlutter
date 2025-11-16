@@ -113,53 +113,169 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text(AppStrings.createTrip), actions: [
-        IconButton(onPressed: _save, icon: const Icon(Icons.save))
-      ]),
+      backgroundColor: const Color(0xFFF5F7FA),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 2,
+        title: const Text(AppStrings.createTrip, style: TextStyle(color: Colors.black87)),
+        actions: [IconButton(onPressed: _save, icon: const Icon(Icons.save, color: Colors.black87))],
+      ),
       body: Form(
         key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              TextFormField(controller: _origin, decoration: const InputDecoration(labelText: AppStrings.origin), validator: _req),
-              TextFormField(controller: _destination, decoration: const InputDecoration(labelText: AppStrings.destination), validator: _req),
-              TextFormField(
-                controller: _departure,
-                readOnly: true,
-                decoration: InputDecoration(
-                  labelText: AppStrings.departureTimeIso,
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.event),
-                    onPressed: () => _pickDateTime(isDeparture: true),
-                    tooltip: AppStrings.pickDate,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth > 780;
+            InputDecoration deco(String label) => InputDecoration(
+                  labelText: label,
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                );
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 980),
+                  child: Card(
+                    elevation: 4,
+                    shadowColor: Colors.black12,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        children: [
+                          isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(child: TextFormField(controller: _origin, decoration: deco(AppStrings.origin), validator: _req)),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: TextFormField(controller: _destination, decoration: deco(AppStrings.destination), validator: _req)),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    TextFormField(controller: _origin, decoration: deco(AppStrings.origin), validator: _req),
+                                    const SizedBox(height: 12),
+                                    TextFormField(controller: _destination, decoration: deco(AppStrings.destination), validator: _req),
+                                  ],
+                                ),
+                          const SizedBox(height: 12),
+                          isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _departure,
+                                        readOnly: true,
+                                        decoration: deco(AppStrings.departureTimeIso).copyWith(
+                                          suffixIcon: IconButton(
+                                            icon: const Icon(Icons.event),
+                                            onPressed: () => _pickDateTime(isDeparture: true),
+                                            tooltip: AppStrings.pickDate,
+                                          ),
+                                        ),
+                                        validator: _req,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _arrival,
+                                        readOnly: true,
+                                        decoration: deco(AppStrings.arrivalTimeIso).copyWith(
+                                          suffixIcon: IconButton(
+                                            icon: const Icon(Icons.event),
+                                            onPressed: () => _pickDateTime(isDeparture: false),
+                                            tooltip: AppStrings.pickDate,
+                                          ),
+                                        ),
+                                        validator: _req,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    TextFormField(
+                                      controller: _departure,
+                                      readOnly: true,
+                                      decoration: deco(AppStrings.departureTimeIso).copyWith(
+                                        suffixIcon: IconButton(
+                                          icon: const Icon(Icons.event),
+                                          onPressed: () => _pickDateTime(isDeparture: true),
+                                          tooltip: AppStrings.pickDate,
+                                        ),
+                                      ),
+                                      validator: _req,
+                                    ),
+                                    const SizedBox(height: 12),
+                                    TextFormField(
+                                      controller: _arrival,
+                                      readOnly: true,
+                                      decoration: deco(AppStrings.arrivalTimeIso).copyWith(
+                                        suffixIcon: IconButton(
+                                          icon: const Icon(Icons.event),
+                                          onPressed: () => _pickDateTime(isDeparture: false),
+                                          tooltip: AppStrings.pickDate,
+                                        ),
+                                      ),
+                                      validator: _req,
+                                    ),
+                                  ],
+                                ),
+                          const SizedBox(height: 12),
+                          isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(child: TextFormField(controller: _price, decoration: deco(AppStrings.price), keyboardType: TextInputType.number)),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: TextFormField(controller: _availableSeats, decoration: deco(AppStrings.availableSeats), keyboardType: TextInputType.number)),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: TextFormField(controller: _totalSeats, decoration: deco(AppStrings.totalSeats), keyboardType: TextInputType.number)),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    TextFormField(controller: _price, decoration: deco(AppStrings.price), keyboardType: TextInputType.number),
+                                    const SizedBox(height: 12),
+                                    TextFormField(controller: _availableSeats, decoration: deco(AppStrings.availableSeats), keyboardType: TextInputType.number),
+                                    const SizedBox(height: 12),
+                                    TextFormField(controller: _totalSeats, decoration: deco(AppStrings.totalSeats), keyboardType: TextInputType.number),
+                                  ],
+                                ),
+                          const SizedBox(height: 12),
+                          isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(child: TextFormField(controller: _vehicleType, decoration: deco(AppStrings.vehicleType))),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: TextFormField(controller: _vehicleId, decoration: deco(AppStrings.vehicleId), keyboardType: TextInputType.text)),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    TextFormField(controller: _vehicleType, decoration: deco(AppStrings.vehicleType)),
+                                    const SizedBox(height: 12),
+                                    TextFormField(controller: _vehicleId, decoration: deco(AppStrings.vehicleId), keyboardType: TextInputType.text),
+                                  ],
+                                ),
+                          const SizedBox(height: 12),
+                          TextFormField(controller: _additionalInfo, decoration: deco(AppStrings.additionalInfo)),
+                          const SizedBox(height: 12),
+                          SwitchListTile(title: const Text(AppStrings.active), value: _isActive, onChanged: (v) => setState(() => _isActive = v)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-                validator: _req,
               ),
-              TextFormField(
-                controller: _arrival,
-                readOnly: true,
-                decoration: InputDecoration(
-                  labelText: AppStrings.arrivalTimeIso,
-                  suffixIcon: IconButton(
-                    icon: const Icon(Icons.event),
-                    onPressed: () => _pickDateTime(isDeparture: false),
-                    tooltip: AppStrings.pickDate,
-                  ),
-                ),
-                validator: _req,
-              ),
-              TextFormField(controller: _price, decoration: const InputDecoration(labelText: AppStrings.price), keyboardType: TextInputType.number),
-              TextFormField(controller: _availableSeats, decoration: const InputDecoration(labelText: AppStrings.availableSeats), keyboardType: TextInputType.number),
-              TextFormField(controller: _totalSeats, decoration: const InputDecoration(labelText: AppStrings.totalSeats), keyboardType: TextInputType.number),
-              TextFormField(controller: _vehicleType, decoration: const InputDecoration(labelText: AppStrings.vehicleType)),
-              TextFormField(controller: _vehicleId, decoration: const InputDecoration(labelText: AppStrings.vehicleId), keyboardType: TextInputType.text),
-              TextFormField(controller: _additionalInfo, decoration: const InputDecoration(labelText: AppStrings.additionalInfo)),
-              const SizedBox(height: 12),
-              SwitchListTile(title: const Text(AppStrings.active), value: _isActive, onChanged: (v) => setState(() => _isActive = v)),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
