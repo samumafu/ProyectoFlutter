@@ -1,292 +1,383 @@
+import 'dart:async';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import '../../../data/models/company_model.dart';
-import '../../../services/company_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tu_flota/core/models/user_model.dart';
+import 'package:tu_flota/core/services/company_service.dart';
+import 'package:tu_flota/core/services/trip_service.dart';
+import 'package:tu_flota/core/services/reservation_service.dart';
+import 'package:tu_flota/core/services/chat_service.dart';
+import 'package:tu_flota/core/services/supabase_service.dart';
+import 'package:tu_flota/features/company/models/company_model.dart';
+import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 
-class CompanyController extends ChangeNotifier {
-  Company? _currentCompany;
-  List<CompanySchedule> _schedules = [];
-  bool _isLoading = false;
-  String? _error;
+class CompanyState {
+  final UserModel? user;
+  final Company? company;
+  final List<Driver> drivers;
+  final List<CompanySchedule> schedules;
+  final Map<int, List<Reservation>> reservationsBySchedule;
+  final Map<int, List<ChatMessage>> messagesByTrip;
+  final bool isLoading;
+  final String? error;
 
-  // Getters
-  Company? get currentCompany => _currentCompany;
-  List<CompanySchedule> get schedules => _schedules;
-  bool get isLoading => _isLoading;
-  String? get error => _error;
-  bool get isLoggedIn => CompanyService.isLoggedIn();
+  const CompanyState({
+    this.user,
+    this.company,
+    this.drivers = const [],
+    this.schedules = const [],
+    this.reservationsBySchedule = const {},
+    this.messagesByTrip = const {},
+    this.isLoading = false,
+    this.error,
+  });
 
-  // Autenticación
-  Future<bool> signIn(String email, String password) async {
-    _setLoading(true);
-    _clearError();
+  CompanyState copyWith({
+    UserModel? user,
+    Company? company,
+    List<Driver>? drivers,
+    List<CompanySchedule>? schedules,
+    Map<int, List<Reservation>>? reservationsBySchedule,
+    Map<int, List<ChatMessage>>? messagesByTrip,
+    bool? isLoading,
+    String? error,
+  }) {
+    return CompanyState(
+      user: user ?? this.user,
+      company: company ?? this.company,
+      drivers: drivers ?? this.drivers,
+      schedules: schedules ?? this.schedules,
+      reservationsBySchedule:
+          reservationsBySchedule ?? this.reservationsBySchedule,
+      messagesByTrip: messagesByTrip ?? this.messagesByTrip,
+      isLoading: isLoading ?? this.isLoading,
+      error: error,
+    );
+  }
+}
 
+class CompanyController extends StateNotifier<CompanyState> {
+  final Ref ref;
+  late final SupabaseClient _client;
+  late final CompanyService _companyService;
+  late final TripService _tripService;
+  late final ReservationService _reservationService;
+  late final ChatService _chatService;
+  final Map<int, RealtimeChannel> _chatChannels = {};
+  RealtimeChannel? _driversChannel;
+  RealtimeChannel? _schedulesChannel;
+
+  CompanyController(this.ref) : super(const CompanyState()) {
+    _client = ref.read(supabaseProvider);
+    _companyService = CompanyService(_client);
+    _tripService = TripService(_client);
+    _reservationService = ReservationService(_client);
+    _chatService = ChatService(_client);
+  }
+
+  Future<void> loadAuthAndCompany() async {
     try {
-      final result = await CompanyService.signInCompany(email, password);
-      
-      if (result['success']) {
-        _currentCompany = result['company'];
-        await loadSchedules();
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError(result['message']);
-        _setLoading(false);
-        return false;
+      state = state.copyWith(isLoading: true, error: null);
+      final authUser = _client.auth.currentUser;
+      if (authUser == null) {
+        state = state.copyWith(isLoading: false);
+        return;
       }
+      final userRow = await _client
+          .from('users')
+          .select()
+          .eq('id', authUser.id)
+          .maybeSingle();
+      if (userRow == null) {
+        state = state.copyWith(isLoading: false);
+        return;
+      }
+      final user = UserModel.fromMap(userRow);
+      final company = await _companyService.fetchCompanyById(user.id);
+      state = state.copyWith(user: user, company: company, isLoading: false);
     } catch (e) {
-      _setError('Error inesperado: ${e.toString()}');
-      _setLoading(false);
-      return false;
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  Future<bool> register({
-    required String name,
-    required String email,
-    required String password,
-    required String phone,
-    required String address,
-    required String nit,
-    String description = '',
-  }) async {
-    _setLoading(true);
-    _clearError();
-
+  Future<void> updateCompanyProfile(Company company) async {
     try {
-      final result = await CompanyService.registerCompany(
-        name: name,
-        email: email,
-        password: password,
-        phone: phone,
-        address: address,
-        nit: nit,
-        description: description,
+      state = state.copyWith(isLoading: true, error: null);
+      final updated = await _companyService.updateCompany(company);
+      state = state.copyWith(company: updated, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> uploadLogo(Uint8List bytes, String fileName) async {
+    try {
+      final companyId = state.company?.id;
+      if (companyId == null) return;
+      state = state.copyWith(isLoading: true);
+      final url = await _companyService.uploadCompanyLogo(
+        companyId: companyId,
+        bytes: bytes,
+        fileName: fileName,
       );
-
-      if (result['success']) {
-        _currentCompany = result['company'];
-        _setLoading(false);
-        notifyListeners();
-        return true;
+      final updated = state.company?.copyWith(logoUrl: url);
+      if (updated != null) {
+        state = state.copyWith(company: updated, isLoading: false);
       } else {
-        _setError(result['message']);
-        _setLoading(false);
-        return false;
+        state = state.copyWith(isLoading: false);
       }
     } catch (e) {
-      _setError('Error inesperado: ${e.toString()}');
-      _setLoading(false);
-      return false;
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  Future<void> signOut() async {
-    await CompanyService.signOut();
-    _currentCompany = null;
-    _schedules = [];
-    _clearError();
-    notifyListeners();
-  }
-
-  // Gestión de empresa
-  Future<bool> updateCompany({
-    String? name,
-    String? phone,
-    String? address,
-    String? description,
-    String? logoUrl,
-  }) async {
-    if (_currentCompany == null) return false;
-
-    _setLoading(true);
-    _clearError();
-
+  Future<void> loadDrivers() async {
     try {
-      final updatedCompany = _currentCompany!.copyWith(
-        name: name ?? _currentCompany!.name,
-        phone: phone ?? _currentCompany!.phone,
-        address: address ?? _currentCompany!.address,
-        description: description ?? _currentCompany!.description,
-        logoUrl: logoUrl ?? _currentCompany!.logoUrl,
-      );
-
-      final result = await CompanyService.updateCompany(updatedCompany);
-      
-      if (result != null) {
-        _currentCompany = result;
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError('Error al actualizar la empresa');
-        _setLoading(false);
-        return false;
-      }
+      state = state.copyWith(isLoading: true, error: null);
+      final drivers = await _companyService.listDrivers();
+      state = state.copyWith(drivers: drivers, isLoading: false);
+      _subscribeDriversRealtime();
     } catch (e) {
-      _setError('Error inesperado: ${e.toString()}');
-      _setLoading(false);
-      return false;
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  // Gestión de horarios
+  Future<void> createDriver(Driver driver) async {
+    try {
+      final created = await _companyService.createDriver(driver);
+      final updated = [...state.drivers, created];
+      state = state.copyWith(drivers: updated);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<void> updateDriver(Driver driver) async {
+    try {
+      final updatedDriver = await _companyService.updateDriver(driver);
+      final updated = state.drivers
+          .map((d) => d.id == updatedDriver.id ? updatedDriver : d)
+          .toList();
+      state = state.copyWith(drivers: updated);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<void> deleteDriver(int id) async {
+    try {
+      await _companyService.deleteDriver(id);
+      state = state.copyWith(
+        drivers: state.drivers.where((d) => d.id != id).toList(),
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<void> toggleDriverAvailability(int id, bool available) async {
+    try {
+      final updatedDriver =
+          await _companyService.toggleDriverAvailability(id, available);
+      state = state.copyWith(
+        drivers: state.drivers
+            .map((d) => d.id == updatedDriver.id ? updatedDriver : d)
+            .toList(),
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
   Future<void> loadSchedules() async {
-    if (_currentCompany == null) return;
-
-    _setLoading(true);
-    _clearError();
-
     try {
-      _schedules = await CompanyService.getCompanySchedules(_currentCompany!.id);
-      _setLoading(false);
-      notifyListeners();
+      final companyId = state.company?.id;
+      if (companyId == null) return;
+      state = state.copyWith(isLoading: true);
+      final schedules = await _tripService.listSchedulesByCompany(companyId);
+      state = state.copyWith(schedules: schedules, isLoading: false);
+      _subscribeSchedulesRealtime();
     } catch (e) {
-      _setError('Error al cargar horarios: ${e.toString()}');
-      _setLoading(false);
+      state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  Future<bool> createSchedule({
-    required String origin,
-    required String destination,
-    required DateTime departureTime,
-    required DateTime arrivalTime,
-    required double price,
-    required int totalSeats,
-    required String vehicleType,
-    required String vehicleId,
-    Map<String, dynamic>? additionalInfo,
-  }) async {
-    if (_currentCompany == null) return false;
-
-    _setLoading(true);
-    _clearError();
-
+  Future<void> createSchedule(CompanySchedule schedule) async {
     try {
-      final schedule = CompanySchedule(
-        id: '', // Se generará en el servidor
-        companyId: _currentCompany!.id,
-        origin: origin,
-        destination: destination,
-        departureTime: departureTime,
-        arrivalTime: arrivalTime,
-        price: price,
-        availableSeats: totalSeats,
-        totalSeats: totalSeats,
-        vehicleType: vehicleType,
-        vehicleId: vehicleId,
-        additionalInfo: additionalInfo ?? {},
+      final created = await _tripService.createSchedule(schedule);
+      state = state.copyWith(schedules: [...state.schedules, created]);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+  }
+
+  Future<void> updateSchedule(CompanySchedule schedule) async {
+    try {
+      final updatedSchedule = await _tripService.updateSchedule(schedule);
+      state = state.copyWith(
+        schedules: state.schedules
+            .map((s) => s.id == updatedSchedule.id ? updatedSchedule : s)
+            .toList(),
       );
-
-      final result = await CompanyService.createSchedule(schedule);
-      
-      if (result != null) {
-        _schedules.add(result);
-        _schedules.sort((a, b) => a.departureTime.compareTo(b.departureTime));
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError('Error al crear el horario');
-        _setLoading(false);
-        return false;
-      }
     } catch (e) {
-      _setError('Error inesperado: ${e.toString()}');
-      _setLoading(false);
-      return false;
+      state = state.copyWith(error: e.toString());
     }
   }
 
-  Future<bool> updateSchedule(CompanySchedule schedule) async {
-    _setLoading(true);
-    _clearError();
-
+  Future<void> deleteSchedule(int id) async {
     try {
-      final result = await CompanyService.updateSchedule(schedule);
-      
-      if (result != null) {
-        final index = _schedules.indexWhere((s) => s.id == schedule.id);
-        if (index != -1) {
-          _schedules[index] = result;
-          _schedules.sort((a, b) => a.departureTime.compareTo(b.departureTime));
-        }
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError('Error al actualizar el horario');
-        _setLoading(false);
-        return false;
-      }
+      await _tripService.deleteSchedule(id);
+      state = state.copyWith(
+        schedules: state.schedules.where((s) => s.id != id).toList(),
+      );
     } catch (e) {
-      _setError('Error inesperado: ${e.toString()}');
-      _setLoading(false);
-      return false;
+      state = state.copyWith(error: e.toString());
     }
   }
 
-  Future<bool> deleteSchedule(String scheduleId) async {
-    _setLoading(true);
-    _clearError();
-
+  Future<void> loadReservationsForSchedule(int scheduleId) async {
     try {
-      final success = await CompanyService.deleteSchedule(scheduleId);
-      
-      if (success) {
-        _schedules.removeWhere((s) => s.id == scheduleId);
-        _setLoading(false);
-        notifyListeners();
-        return true;
-      } else {
-        _setError('Error al eliminar el horario');
-        _setLoading(false);
-        return false;
-      }
+      final reservations =
+          await _reservationService.listReservationsForSchedule(scheduleId);
+      final updatedMap = Map<int, List<Reservation>>.from(
+          state.reservationsBySchedule);
+      updatedMap[scheduleId] = reservations;
+      state = state.copyWith(reservationsBySchedule: updatedMap);
     } catch (e) {
-      _setError('Error inesperado: ${e.toString()}');
-      _setLoading(false);
-      return false;
+      state = state.copyWith(error: e.toString());
     }
   }
 
-  // Métodos de utilidad
-  List<CompanySchedule> getSchedulesByRoute(String origin, String destination) {
-    return _schedules
-        .where((s) => s.origin == origin && s.destination == destination && s.isActive)
-        .toList();
+  Future<void> loadMessagesForTrip(int tripId) async {
+    try {
+      final msgs = await _chatService.listMessages(tripId);
+      final updatedMap = Map<int, List<ChatMessage>>.from(state.messagesByTrip);
+      updatedMap[tripId] = msgs;
+      state = state.copyWith(messagesByTrip: updatedMap);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
   }
 
-  List<CompanySchedule> getSchedulesByDate(DateTime date) {
-    final startOfDay = DateTime(date.year, date.month, date.day);
-    final endOfDay = startOfDay.add(const Duration(days: 1));
-    
-    return _schedules
-        .where((s) => 
-            s.departureTime.isAfter(startOfDay) && 
-            s.departureTime.isBefore(endOfDay) &&
-            s.isActive)
-        .toList();
+  Future<void> sendMessage({required int tripId, required String text}) async {
+    try {
+      final senderId = state.user?.id;
+      if (senderId == null) return;
+      final msg = await _chatService.sendMessage(
+        tripId: tripId,
+        senderId: senderId,
+        message: text,
+      );
+      final list = <ChatMessage>[...(state.messagesByTrip[tripId] ?? const []), msg];
+      final updatedMap = Map<int, List<ChatMessage>>.from(state.messagesByTrip);
+      updatedMap[tripId] = list;
+      state = state.copyWith(messagesByTrip: updatedMap);
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
   }
 
-  // Métodos privados
-  void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
+  void subscribeTripMessages(int tripId) {
+    if (_chatChannels.containsKey(tripId)) return;
+    final channel = _chatService.subscribeTripMessages(tripId, (msg) {
+      final list = <ChatMessage>[...(state.messagesByTrip[tripId] ?? const []), msg];
+      final updatedMap = Map<int, List<ChatMessage>>.from(state.messagesByTrip);
+      updatedMap[tripId] = list;
+      state = state.copyWith(messagesByTrip: updatedMap);
+    });
+    _chatChannels[tripId] = channel;
   }
 
-  void _setError(String error) {
-    _error = error;
-    notifyListeners();
+  void unsubscribeTripMessages(int tripId) {
+    final channel = _chatChannels.remove(tripId);
+    channel?.unsubscribe();
   }
 
-  void _clearError() {
-    _error = null;
+  // Internal realtime subscriptions
+  void _subscribeDriversRealtime() {
+    _driversChannel?.unsubscribe();
+    _driversChannel = _companyService.subscribeDrivers(
+      onInsert: (d) {
+        final updated = [...state.drivers, d];
+        state = state.copyWith(drivers: updated);
+      },
+      onUpdate: (d) {
+        final updated = state.drivers
+            .map((e) => e.id == d.id ? d : e)
+            .toList();
+        state = state.copyWith(drivers: updated);
+      },
+      onDelete: (id) {
+        final updated = state.drivers.where((e) => e.id != id).toList();
+        state = state.copyWith(drivers: updated);
+      },
+    );
+  }
+
+  void _subscribeSchedulesRealtime() {
+    _schedulesChannel?.unsubscribe();
+    _schedulesChannel = _tripService.subscribeSchedules(
+      onInsert: (s) {
+        final updated = [...state.schedules, s];
+        state = state.copyWith(schedules: updated);
+      },
+      onUpdate: (s) {
+        final updated = state.schedules
+            .map((e) => e.id == s.id ? s : e)
+            .toList();
+        state = state.copyWith(schedules: updated);
+      },
+      onDelete: (id) {
+        final updated = state.schedules.where((e) => e.id != id).toList();
+        state = state.copyWith(schedules: updated);
+      },
+    );
+  }
+
+  // Helpers
+  String formatIso(DateTime date, TimeOfDay time) {
+    final dt = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+    return dt.toIso8601String();
+  }
+
+  Future<Map<String, int>> loadCounts() async {
+    // Counts fetched directly from DB for dashboard
+    final driversRes = await _client.from('conductores').select('id');
+    final schedulesRes = await _client.from('company_schedules').select('id');
+    final reservationsRes = await _client.from('reservations').select('id');
+    final driversCount = (driversRes as List?)?.length ?? state.drivers.length;
+    final schedulesCount = (schedulesRes as List?)?.length ?? state.schedules.length;
+    final reservationsCount = (reservationsRes as List?)?.length ??
+        state.reservationsBySchedule.values.fold<int>(0, (p, e) => p + e.length);
+    return {
+      'drivers': driversCount,
+      'schedules': schedulesCount,
+      'reservations': reservationsCount,
+    };
   }
 
   @override
   void dispose() {
+    for (final c in _chatChannels.values) {
+      c.unsubscribe();
+    }
+    _chatChannels.clear();
+    _driversChannel?.unsubscribe();
+    _driversChannel = null;
+    _schedulesChannel?.unsubscribe();
+    _schedulesChannel = null;
     super.dispose();
   }
 }
+
+final companyControllerProvider =
+    StateNotifierProvider<CompanyController, CompanyState>((ref) {
+  return CompanyController(ref);
+});

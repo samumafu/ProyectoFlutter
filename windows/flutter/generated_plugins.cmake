@@ -4,8 +4,6 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
-  geolocator_windows
-  printing
   url_launcher_windows
 )
 
