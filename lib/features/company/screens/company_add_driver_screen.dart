@@ -115,6 +115,7 @@ class _CompanyAddDriverScreenState extends ConsumerState<CompanyAddDriverScreen>
         autoPlate: _autoPlate.text.trim().isEmpty ? null : _autoPlate.text.trim(),
         available: _available,
         rating: _editing?.rating,
+        companyId: ref.read(companyControllerProvider).company?.id,
       );
 
       if (_editing == null) {

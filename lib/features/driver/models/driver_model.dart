@@ -10,6 +10,7 @@ class Driver {
   final String? autoPlate;
   final bool available;
   final double? rating;
+  final String? companyId;
 
   const Driver({
     required this.id,
@@ -21,6 +22,7 @@ class Driver {
     this.autoColor,
     this.autoPlate,
     this.rating,
+    this.companyId,
   });
 
   // 🚨 MÉTODO FALTANTE: FACTORY CONSTRUCTOR FROMMAP
@@ -35,6 +37,7 @@ class Driver {
       autoPlate: map['auto_plate'] as String?,
       available: (map['available'] as bool?) ?? true,
       rating: (map['rating'] as num?)?.toDouble(),
+      companyId: map['company_id']?.toString(),
     );
   }
 
@@ -50,6 +53,7 @@ class Driver {
       'auto_plate': autoPlate,
       'available': available,
       'rating': rating,
+      'company_id': companyId,
     };
   }
 }
