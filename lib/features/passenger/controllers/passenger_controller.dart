@@ -4,18 +4,27 @@ import 'package:tu_flota/core/services/supabase_service.dart';
 import 'package:tu_flota/core/services/trip_service.dart';
 import 'package:tu_flota/core/services/reservation_service.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
+// 🚨 Importar la lista de municipios (asumiendo esta ruta)
+import 'package:tu_flota/core/data/narino_municipalities.dart'; 
 
+// --------------------------------------------------------------------------
+// 1. ESTADO CORREGIDO
+// --------------------------------------------------------------------------
 class PassengerState {
   final List<CompanySchedule> trips;
   final List<Reservation> myReservations;
   final bool isLoading;
   final String? error;
+  // ✅ CAMBIO: Campo de Municipios Añadido
+  final List<String> municipalities; 
 
   const PassengerState({
     this.trips = const [],
     this.myReservations = const [],
     this.isLoading = false,
     this.error,
+    // ✅ Inicialización del campo
+    this.municipalities = const [], 
   });
 
   PassengerState copyWith({
@@ -23,16 +32,23 @@ class PassengerState {
     List<Reservation>? myReservations,
     bool? isLoading,
     String? error,
+    // ✅ Campo añadido en copyWith
+    List<String>? municipalities, 
   }) {
     return PassengerState(
       trips: trips ?? this.trips,
       myReservations: myReservations ?? this.myReservations,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      // ✅ Asignación del campo
+      municipalities: municipalities ?? this.municipalities, 
     );
   }
 }
 
+// --------------------------------------------------------------------------
+// 2. CONTROLLER CORREGIDO
+// --------------------------------------------------------------------------
 class PassengerController extends StateNotifier<PassengerState> {
   final Ref ref;
   late final SupabaseClient _client;
@@ -43,6 +59,20 @@ class PassengerController extends StateNotifier<PassengerState> {
     _client = ref.read(supabaseProvider);
     _tripService = TripService(_client);
     _reservationService = ReservationService(_client);
+  }
+
+  // ✅ NUEVO MÉTODO: Cargar municipios desde el archivo de datos
+  Future<void> loadMunicipalities() async {
+    // La lista se obtiene directamente del archivo de datos
+    final List<String> loadedMunicipalities = narinoMunicipalities;
+    
+    // El estado se actualiza SÓLO si hay datos (para evitar un redibujo si ya están cargados)
+    if (state.municipalities.isEmpty && loadedMunicipalities.isNotEmpty) {
+      state = state.copyWith(
+        municipalities: loadedMunicipalities,
+        error: null, // Limpiar errores previos si la carga fue exitosa
+      );
+    }
   }
 
   Future<void> loadAllTrips() async {
