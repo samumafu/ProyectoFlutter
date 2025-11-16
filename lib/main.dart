@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'app.dart';
-import 'core/services/supabase_service.dart';
+import 'package:tu_flota/core/routing/app_router.dart';
+import 'package:tu_flota/core/services/supabase_service.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Inicializa Supabase
-  await SupabaseService().init();
-
-  runApp(const TuFlotaApp());
+  await SupabaseService.init();
+  runApp(const AppRouter());
 }

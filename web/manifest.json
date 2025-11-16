@@ -1,6 +1,6 @@
 {
-    "name": "proyecto_tu_flota",
-    "short_name": "proyecto_tu_flota",
+    "name": "tu_flota",
+    "short_name": "tu_flota",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
