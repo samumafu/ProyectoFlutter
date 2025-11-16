@@ -60,6 +60,7 @@ class AppStrings {
   static const plate = 'Plate';
   static const available = 'Available';
   static const rating = 'Rating';
+  static const vehicleModelRequired = 'Vehicle model is required';
   static const driverCreated = 'Driver created';
   static const driverUpdated = 'Driver updated';
   static const driverDeleted = 'Driver deleted';
@@ -96,6 +97,9 @@ class AppStrings {
   static const passenger = 'Passenger';
   static const status = 'Status';
   static const total = 'Total';
+  static const selectYourCompany = 'Select your Company';
+  static const noActiveTripsFound = 'No active trips found.';
+  static const tapPlusToCreate = 'Tap the "+" button to create a new schedule.';
 
   // Chat
   static const chat = 'Chat';

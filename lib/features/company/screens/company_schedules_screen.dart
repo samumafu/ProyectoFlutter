@@ -31,38 +31,37 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
 
   // Unified method for data loading and company selection logic
   Future<void> _loadInitialData() async {
-    // 🚨 Mejorar seguridad: Guardar el notifier antes de la primera llamada asíncrona
-    // Esto es especialmente útil si el widget se elimina mientras espera.
     final notifier = ref.read(companyControllerProvider.notifier);
-    
-    // Llamar a loadAuthAndCompany
-    await notifier.loadAuthAndCompany();
+    final current = ref.read(companyControllerProvider);
 
-    // Después de la carga, revisar el estado usando una referencia FRESH
-    // o usando el estado del 'notifier' que ya está actualizado.
+    // If a company is already selected, just load schedules and return
+    if (current.company != null) {
+      await notifier.loadSchedules();
+      return;
+    }
+
+    // Try to load auth and associated company
+    await notifier.loadAuthAndCompany();
     final state = ref.read(companyControllerProvider);
-    
-    if (state.company == null && mounted) { // 🚨 Añadir 'mounted'
+
+    // If still no company, prompt once for selection
+    if (state.company == null && mounted) {
       final supabase = ref.read(supabaseProvider);
       final response = await supabase.from('companies').select();
 
-      if (mounted && response is List) { // Check de 'mounted' después de Supabase
+      if (mounted && response is List) {
         final companies = response.whereType<Map<String, dynamic>>().toList();
-        
         if (companies.length == 1) {
-           // Auto-select if only one company is available
           final company = Company.fromMap(companies.first);
           notifier.setCompany(company);
         } else if (companies.length > 1) {
-          // Show selection dialog for multiple companies
           _showCompanySelectionDialog(companies);
-          return; // Salir aquí si mostramos diálogo, loadSchedules se llama dentro del diálogo.
+          return; // loadSchedules is called after selection
         }
       }
     }
-    
-    // Load schedules after company is set or confirmed
-    // Solo si no se mostró el diálogo, o si la compañía ya estaba cargada/auto-seleccionada.
+
+    // Load schedules when company is set or confirmed
     await notifier.loadSchedules();
   }
 
@@ -76,7 +75,7 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
 
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Text('Select your Company', style: TextStyle(fontWeight: FontWeight.bold)),
+          title: const Text(AppStrings.selectYourCompany, style: TextStyle(fontWeight: FontWeight.bold)),
           content: SizedBox(
             width: 320,
             height: 240,
@@ -173,11 +172,11 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
                           Icon(Icons.departure_board_outlined, size: 80, color: Colors.black26),
                           SizedBox(height: 16),
                           Text(
-                            'No active trips found.',
+                            AppStrings.noActiveTripsFound,
                             style: TextStyle(fontSize: 18, color: Colors.black54),
                           ),
                           Text(
-                            'Tap the "+" button to create a new schedule.',
+                            AppStrings.tapPlusToCreate,
                             style: TextStyle(fontSize: 14, color: Colors.black45),
                           ),
                         ],

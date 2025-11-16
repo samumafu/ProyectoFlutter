@@ -88,7 +88,16 @@ class CompanyController extends StateNotifier<CompanyState> {
       state = state.copyWith(isLoading: true, error: null);
       final authUser = _client.auth.currentUser;
       if (authUser == null) {
-        state = state.copyWith(isLoading: false);
+        state = CompanyState(
+          user: null,
+          company: null,
+          drivers: state.drivers,
+          schedules: state.schedules,
+          reservationsBySchedule: state.reservationsBySchedule,
+          messagesByTrip: state.messagesByTrip,
+          isLoading: false,
+          error: null,
+        );
         return;
       }
       final userRow = await _client
@@ -97,7 +106,16 @@ class CompanyController extends StateNotifier<CompanyState> {
           .eq('id', authUser.id)
           .maybeSingle();
       if (userRow == null) {
-        state = state.copyWith(isLoading: false);
+        state = CompanyState(
+          user: null,
+          company: null,
+          drivers: state.drivers,
+          schedules: state.schedules,
+          reservationsBySchedule: state.reservationsBySchedule,
+          messagesByTrip: state.messagesByTrip,
+          isLoading: false,
+          error: null,
+        );
         return;
       }
       final user = UserModel.fromMap(userRow);
@@ -110,7 +128,18 @@ class CompanyController extends StateNotifier<CompanyState> {
           company = all.first;
         }
       }
-      state = state.copyWith(user: user, company: company, isLoading: false);
+      // Preserve previously selected company if no association was found
+      company ??= state.company;
+      state = CompanyState(
+        user: user,
+        company: company,
+        drivers: state.drivers,
+        schedules: state.schedules,
+        reservationsBySchedule: state.reservationsBySchedule,
+        messagesByTrip: state.messagesByTrip,
+        isLoading: false,
+        error: null,
+      );
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
@@ -180,7 +209,7 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
-  Future<void> deleteDriver(int id) async {
+  Future<void> deleteDriver(String id) async {
     try {
       await _companyService.deleteDriver(id);
       state = state.copyWith(
@@ -191,7 +220,7 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
-  Future<void> toggleDriverAvailability(int id, bool available) async {
+  Future<void> toggleDriverAvailability(String id, bool available) async {
     try {
       final updatedDriver =
           await _companyService.toggleDriverAvailability(id, available);
@@ -440,6 +469,18 @@ class CompanyController extends StateNotifier<CompanyState> {
     _schedulesChannel?.unsubscribe();
     _schedulesChannel = null;
     super.dispose();
+  }
+
+  void reset() {
+    for (final c in _chatChannels.values) {
+      c.unsubscribe();
+    }
+    _chatChannels.clear();
+    _driversChannel?.unsubscribe();
+    _driversChannel = null;
+    _schedulesChannel?.unsubscribe();
+    _schedulesChannel = null;
+    state = const CompanyState();
   }
 }
 
