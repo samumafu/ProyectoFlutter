@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tu_flota/features/company/models/company_model.dart';
+import 'package:tu_flota/features/driver/models/driver_model.dart';
 
 typedef OnDriverInsert = void Function(Driver driver);
 typedef OnDriverUpdate = void Function(Driver driver);

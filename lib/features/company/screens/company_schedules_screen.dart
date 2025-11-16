@@ -31,33 +31,49 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
 
   // Unified method for data loading and company selection logic
   Future<void> _loadInitialData() async {
+    // 🚨 Mejorar seguridad: Guardar el notifier antes de la primera llamada asíncrona
+    // Esto es especialmente útil si el widget se elimina mientras espera.
     final notifier = ref.read(companyControllerProvider.notifier);
+    
+    // Llamar a loadAuthAndCompany
     await notifier.loadAuthAndCompany();
 
+    // Después de la carga, revisar el estado usando una referencia FRESH
+    // o usando el estado del 'notifier' que ya está actualizado.
     final state = ref.read(companyControllerProvider);
-    if (state.company == null) {
+    
+    if (state.company == null && mounted) { // 🚨 Añadir 'mounted'
       final supabase = ref.read(supabaseProvider);
-      final companies = await supabase.from('companies').select();
+      final response = await supabase.from('companies').select();
 
-      if (mounted && companies is List && companies.isNotEmpty) {
+      if (mounted && response is List) { // Check de 'mounted' después de Supabase
+        final companies = response.whereType<Map<String, dynamic>>().toList();
+        
         if (companies.length == 1) {
            // Auto-select if only one company is available
-          final company = Company.fromMap(companies.first as Map<String, dynamic>);
+          final company = Company.fromMap(companies.first);
           notifier.setCompany(company);
-        } else {
+        } else if (companies.length > 1) {
           // Show selection dialog for multiple companies
           _showCompanySelectionDialog(companies);
+          return; // Salir aquí si mostramos diálogo, loadSchedules se llama dentro del diálogo.
         }
       }
     }
+    
     // Load schedules after company is set or confirmed
+    // Solo si no se mostró el diálogo, o si la compañía ya estaba cargada/auto-seleccionada.
     await notifier.loadSchedules();
   }
 
-  void _showCompanySelectionDialog(List<dynamic> companies) {
+  // Modificar la firma para que acepte List<Map<String, dynamic>>
+  void _showCompanySelectionDialog(List<Map<String, dynamic>> companies) {
     showDialog(
       context: context,
       builder: (ctx) {
+        // 🚨 Guardar el notifier del contexto del widget principal (CompanySchedulesScreen)
+        final notifier = ref.read(companyControllerProvider.notifier); 
+
         return AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: const Text('Select your Company', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -66,8 +82,7 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
             height: 240,
             child: ListView(
               shrinkWrap: true,
-              children: companies.map<Widget>((e) {
-                final companyMap = e as Map<String, dynamic>;
+              children: companies.map<Widget>((companyMap) {
                 final name = companyMap['name']?.toString() ?? 'Company';
                 return Card(
                   elevation: 0,
@@ -78,9 +93,13 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                     onTap: () {
                       final company = Company.fromMap(companyMap);
-                      ref.read(companyControllerProvider.notifier).setCompany(company);
-                      Navigator.of(ctx).pop();
-                      ref.read(companyControllerProvider.notifier).loadSchedules();
+                      
+                      // 1. 🟢 EJECUTAR LÓGICA DE RIVERPOD PRIMERO (Usando el notifier guardado)
+                      notifier.setCompany(company);
+                      notifier.loadSchedules();
+                      
+                      // 2. 🔴 CERRAR EL DIÁLOGO DESPUÉS
+                      Navigator.of(ctx).pop(); 
                     },
                   ),
                 );
@@ -95,7 +114,8 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(companyControllerProvider);
-    final notifier = ref.read(companyControllerProvider.notifier);
+    // 🚨 Guardar la referencia del notifier fuera de los callbacks asíncronos si se usará en ellos.
+    final notifier = ref.read(companyControllerProvider.notifier); 
 
     // Determines the appropriate padding for centering content on large screens
     final double maxContentWidth = 980; 
@@ -184,7 +204,8 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
                             '/company/trip/edit',
                             arguments: s,
                           ),
-                          onDelete: () => _showDeleteConfirmation(context, notifier, s.id),
+                          // Usar 'notifier' guardado para evitar Bad State en async actions
+                          onDelete: () => _showDeleteConfirmation(context, notifier, s.id), 
                           onViewReservations: () => _showReservationsModal(context, notifier, s.id),
                           onOpenChat: () => _showChatModal(context, notifier, s.id),
                         ),
@@ -230,6 +251,7 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
   }
 
   void _showReservationsModal(BuildContext context, CompanyController notifier, String scheduleId) async {
+    // 🚨 Usar el notifier guardado (pasado como argumento) para la llamada asíncrona
     await notifier.loadReservationsForSchedule(scheduleId);
     
     showModalBottomSheet(
@@ -281,6 +303,7 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
   }
 
   void _showChatModal(BuildContext context, CompanyController notifier, String tripId) async {
+    // 🚨 Usar el notifier guardado (pasado como argumento) para la llamada asíncrona
     await notifier.loadMessagesForTrip(tripId);
     notifier.subscribeTripMessages(tripId);
 
@@ -311,7 +334,11 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
                       title: const Text(AppStrings.chat, style: TextStyle(fontWeight: FontWeight.bold)),
                       trailing: IconButton(
                         icon: const Icon(Icons.close),
-                        onPressed: () => Navigator.of(ctx).pop(),
+                        onPressed: () {
+                          // 🚨 Usar el notifier guardado (pasado como argumento) al cerrar
+                          notifier.unsubscribeTripMessages(tripId);
+                          Navigator.of(ctx).pop();
+                        },
                       ),
                     ),
                     const Divider(height: 1),
@@ -394,9 +421,8 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
                               onPressed: () async {
                                 final txt = textCtrl.text.trim();
                                 if (txt.isEmpty) return;
-                                await ref
-                                    .read(companyControllerProvider.notifier)
-                                    .sendMessage(tripId: tripId, text: txt);
+                                // 🚨 Usar el notifier guardado (pasado como argumento) para la llamada asíncrona
+                                await notifier.sendMessage(tripId: tripId, text: txt); 
                                 textCtrl.clear();
                               },
                               tooltip: AppStrings.send,
@@ -413,7 +439,7 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
         );
       },
     ).whenComplete(() {
-      // Clean up the realtime subscription when chat is closed
+      // 🚨 Limpiar la suscripción en 'whenComplete' (usando el notifier pasado)
       notifier.unsubscribeTripMessages(tripId);
     });
   }
