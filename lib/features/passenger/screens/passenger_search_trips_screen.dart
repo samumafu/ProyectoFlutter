@@ -519,6 +519,21 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
           },
         ),
       ),
+      
+      // 🚀 AÑADIR EL FLOATING ACTION BUTTON AQUÍ
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          // Navegar a la pantalla del asistente de chat
+          // Asegúrate de que '/passenger/chat-assistant' esté definido en tus rutas.
+          Navigator.pushNamed(context, '/passenger/chat-assistant');
+        },
+        label: const Text("Tu Flota IA"),
+        icon: const Icon(Icons.chat_bubble_outline),
+        backgroundColor: _despegarPrimaryBlue,
+        foregroundColor: Colors.white,
+        tooltip: 'Asistente Virtual',
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+      ),
     );
   }
 }
