@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 import 'package:tu_flota/core/constants/app_strings.dart';
+import 'dart:convert';
 
 class CompanyTripCard extends StatelessWidget {
   final CompanySchedule schedule;
@@ -48,29 +49,28 @@ class CompanyTripCard extends StatelessWidget {
             Text('${AppStrings.seats}: ${schedule.availableSeats}/${schedule.totalSeats}'),
             if (schedule.vehicleType != null) Text('${AppStrings.vehicle}: ${schedule.vehicleType}'),
             if (schedule.additionalInfo != null)
-              Text('${AppStrings.info}: ${schedule.additionalInfo}'),
+              Text('${AppStrings.info}: ${jsonEncode(schedule.additionalInfo)}'),
             const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
+            Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
               children: [
                 TextButton.icon(
                   onPressed: onViewReservations,
                   icon: const Icon(Icons.group),
                   label: const Text(AppStrings.reservations),
                 ),
-                const SizedBox(width: 8),
                 TextButton.icon(
                   onPressed: onOpenChat,
                   icon: const Icon(Icons.chat_bubble_outline),
                   label: const Text(AppStrings.chat),
                 ),
-                const SizedBox(width: 8),
                 TextButton.icon(
                   onPressed: onEdit,
                   icon: const Icon(Icons.edit),
                   label: const Text(AppStrings.edit),
                 ),
-                const SizedBox(width: 8),
                 TextButton.icon(
                   onPressed: onDelete,
                   icon: const Icon(Icons.delete_outline),

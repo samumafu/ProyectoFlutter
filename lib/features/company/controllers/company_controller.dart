@@ -17,8 +17,8 @@ class CompanyState {
   final Company? company;
   final List<Driver> drivers;
   final List<CompanySchedule> schedules;
-  final Map<int, List<Reservation>> reservationsBySchedule;
-  final Map<int, List<ChatMessage>> messagesByTrip;
+  final Map<String, List<Reservation>> reservationsBySchedule;
+  final Map<String, List<ChatMessage>> messagesByTrip;
   final bool isLoading;
   final String? error;
 
@@ -38,8 +38,8 @@ class CompanyState {
     Company? company,
     List<Driver>? drivers,
     List<CompanySchedule>? schedules,
-    Map<int, List<Reservation>>? reservationsBySchedule,
-    Map<int, List<ChatMessage>>? messagesByTrip,
+    Map<String, List<Reservation>>? reservationsBySchedule,
+    Map<String, List<ChatMessage>>? messagesByTrip,
     bool? isLoading,
     String? error,
   }) {
@@ -48,8 +48,7 @@ class CompanyState {
       company: company ?? this.company,
       drivers: drivers ?? this.drivers,
       schedules: schedules ?? this.schedules,
-      reservationsBySchedule:
-          reservationsBySchedule ?? this.reservationsBySchedule,
+      reservationsBySchedule: reservationsBySchedule ?? this.reservationsBySchedule,
       messagesByTrip: messagesByTrip ?? this.messagesByTrip,
       isLoading: isLoading ?? this.isLoading,
       error: error,
@@ -64,7 +63,7 @@ class CompanyController extends StateNotifier<CompanyState> {
   late final TripService _tripService;
   late final ReservationService _reservationService;
   late final ChatService _chatService;
-  final Map<int, RealtimeChannel> _chatChannels = {};
+  final Map<String, RealtimeChannel> _chatChannels = {};
   RealtimeChannel? _driversChannel;
   RealtimeChannel? _schedulesChannel;
 
@@ -94,7 +93,15 @@ class CompanyController extends StateNotifier<CompanyState> {
         return;
       }
       final user = UserModel.fromMap(userRow);
-      final company = await _companyService.fetchCompanyById(user.id);
+      // Try to associate company by email (case-insensitive)
+      Company? company = await _companyService.fetchCompanyByEmail(user.email);
+      // Fallback: if no match and there is only ONE company, select it
+      if (company == null && user.role == 'empresa') {
+        final all = await _companyService.listCompanies();
+        if (all.length == 1) {
+          company = all.first;
+        }
+      }
       state = state.copyWith(user: user, company: company, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -205,11 +212,35 @@ class CompanyController extends StateNotifier<CompanyState> {
 
   Future<void> createSchedule(CompanySchedule schedule) async {
     try {
+      // Ensure schedule has the current company id
+      final cid = state.company?.id;
+      if (cid != null && schedule.companyId != cid) {
+        schedule = CompanySchedule(
+          id: schedule.id,
+          companyId: cid,
+          origin: schedule.origin,
+          destination: schedule.destination,
+          departureTime: schedule.departureTime,
+          arrivalTime: schedule.arrivalTime,
+          price: schedule.price,
+          availableSeats: schedule.availableSeats,
+          totalSeats: schedule.totalSeats,
+          isActive: schedule.isActive,
+          vehicleType: schedule.vehicleType,
+          vehicleId: schedule.vehicleId,
+          additionalInfo: schedule.additionalInfo,
+        );
+      }
       final created = await _tripService.createSchedule(schedule);
       state = state.copyWith(schedules: [...state.schedules, created]);
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
+  }
+
+  // Allow manual company selection when association is missing
+  void setCompany(Company company) {
+    state = state.copyWith(company: company);
   }
 
   Future<void> updateSchedule(CompanySchedule schedule) async {
@@ -225,7 +256,7 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
-  Future<void> deleteSchedule(int id) async {
+  Future<void> deleteSchedule(String id) async {
     try {
       await _tripService.deleteSchedule(id);
       state = state.copyWith(
@@ -236,11 +267,11 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
-  Future<void> loadReservationsForSchedule(int scheduleId) async {
+  Future<void> loadReservationsForSchedule(String scheduleId) async {
     try {
       final reservations =
           await _reservationService.listReservationsForSchedule(scheduleId);
-      final updatedMap = Map<int, List<Reservation>>.from(
+      final updatedMap = Map<String, List<Reservation>>.from(
           state.reservationsBySchedule);
       updatedMap[scheduleId] = reservations;
       state = state.copyWith(reservationsBySchedule: updatedMap);
@@ -249,10 +280,10 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
-  Future<void> loadMessagesForTrip(int tripId) async {
+  Future<void> loadMessagesForTrip(String tripId) async {
     try {
       final msgs = await _chatService.listMessages(tripId);
-      final updatedMap = Map<int, List<ChatMessage>>.from(state.messagesByTrip);
+      final updatedMap = Map<String, List<ChatMessage>>.from(state.messagesByTrip);
       updatedMap[tripId] = msgs;
       state = state.copyWith(messagesByTrip: updatedMap);
     } catch (e) {
@@ -260,7 +291,7 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
-  Future<void> sendMessage({required int tripId, required String text}) async {
+  Future<void> sendMessage({required String tripId, required String text}) async {
     try {
       final senderId = state.user?.id;
       if (senderId == null) return;
@@ -270,7 +301,7 @@ class CompanyController extends StateNotifier<CompanyState> {
         message: text,
       );
       final list = <ChatMessage>[...(state.messagesByTrip[tripId] ?? const []), msg];
-      final updatedMap = Map<int, List<ChatMessage>>.from(state.messagesByTrip);
+      final updatedMap = Map<String, List<ChatMessage>>.from(state.messagesByTrip);
       updatedMap[tripId] = list;
       state = state.copyWith(messagesByTrip: updatedMap);
     } catch (e) {
@@ -278,18 +309,18 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
-  void subscribeTripMessages(int tripId) {
+  void subscribeTripMessages(String tripId) {
     if (_chatChannels.containsKey(tripId)) return;
     final channel = _chatService.subscribeTripMessages(tripId, (msg) {
       final list = <ChatMessage>[...(state.messagesByTrip[tripId] ?? const []), msg];
-      final updatedMap = Map<int, List<ChatMessage>>.from(state.messagesByTrip);
+      final updatedMap = Map<String, List<ChatMessage>>.from(state.messagesByTrip);
       updatedMap[tripId] = list;
       state = state.copyWith(messagesByTrip: updatedMap);
     });
     _chatChannels[tripId] = channel;
   }
 
-  void unsubscribeTripMessages(int tripId) {
+  void unsubscribeTripMessages(String tripId) {
     final channel = _chatChannels.remove(tripId);
     channel?.unsubscribe();
   }
@@ -319,14 +350,20 @@ class CompanyController extends StateNotifier<CompanyState> {
     _schedulesChannel?.unsubscribe();
     _schedulesChannel = _tripService.subscribeSchedules(
       onInsert: (s) {
-        final updated = [...state.schedules, s];
-        state = state.copyWith(schedules: updated);
+        final companyId = state.company?.id;
+        if (companyId != null && s.companyId == companyId) {
+          final updated = [...state.schedules, s];
+          state = state.copyWith(schedules: updated);
+        }
       },
       onUpdate: (s) {
-        final updated = state.schedules
-            .map((e) => e.id == s.id ? s : e)
-            .toList();
-        state = state.copyWith(schedules: updated);
+        final companyId = state.company?.id;
+        if (companyId != null && s.companyId == companyId) {
+          final updated = state.schedules
+              .map((e) => e.id == s.id ? s : e)
+              .toList();
+          state = state.copyWith(schedules: updated);
+        }
       },
       onDelete: (id) {
         final updated = state.schedules.where((e) => e.id != id).toList();
@@ -348,18 +385,39 @@ class CompanyController extends StateNotifier<CompanyState> {
   }
 
   Future<Map<String, int>> loadCounts() async {
-    // Counts fetched directly from DB for dashboard
-    final driversRes = await _client.from('conductores').select('id');
-    final schedulesRes = await _client.from('company_schedules').select('id');
-    final reservationsRes = await _client.from('reservations').select('id');
-    final driversCount = (driversRes as List?)?.length ?? state.drivers.length;
-    final schedulesCount = (schedulesRes as List?)?.length ?? state.schedules.length;
-    final reservationsCount = (reservationsRes as List?)?.length ??
-        state.reservationsBySchedule.values.fold<int>(0, (p, e) => p + e.length);
+    final companyId = state.company?.id;
+    if (companyId == null) {
+      return {
+        'drivers': state.drivers.length,
+        'schedules': state.schedules.length,
+        'reservations': state.reservationsBySchedule.values.fold<int>(0, (p, e) => p + e.length),
+      };
+    }
+
+    // Schedules count filtered by company
+    final schedulesRes = await _client
+        .from('company_schedules')
+        .select('id')
+        .eq('company_id', companyId);
+    final scheduleIds = (schedulesRes as List?)
+            ?.map((e) => (e as Map<String, dynamic>)['id'].toString())
+            .toList() ??
+        const <String>[];
+
+    // Reservations count filtered to schedules of this company
+    List reservationsRes = const [];
+    if (scheduleIds.isNotEmpty) {
+      final inValues = '(${scheduleIds.map((e) => '"$e"').join(',')})';
+      reservationsRes = await _client
+          .from('reservations')
+          .select('id')
+          .filter('trip_id', 'in', inValues);
+    }
+
     return {
-      'drivers': driversCount,
-      'schedules': schedulesCount,
-      'reservations': reservationsCount,
+      'drivers': state.drivers.length, // until driver-company relation exists
+      'schedules': scheduleIds.length,
+      'reservations': (reservationsRes as List).length,
     };
   }
 

@@ -7,7 +7,7 @@ class ChatService {
   final SupabaseClient client;
   ChatService(this.client);
 
-  Future<List<ChatMessage>> listMessages(int tripId) async {
+  Future<List<ChatMessage>> listMessages(String tripId) async {
     final data = await client
         .from('chat_messages')
         .select()
@@ -19,7 +19,7 @@ class ChatService {
   }
 
   Future<ChatMessage> sendMessage({
-    required int tripId,
+    required String tripId,
     required String senderId,
     required String message,
   }) async {
@@ -35,7 +35,7 @@ class ChatService {
     return ChatMessage.fromMap(inserted!);
   }
 
-  RealtimeChannel subscribeTripMessages(int tripId, OnMessage onMessage) {
+  RealtimeChannel subscribeTripMessages(String tripId, OnMessage onMessage) {
     final channel = client.channel('public:chat_messages').onPostgresChanges(
       event: PostgresChangeEvent.insert,
       schema: 'public',
@@ -43,7 +43,7 @@ class ChatService {
       callback: (payload) {
         final newRow = payload.newRecord;
         if (newRow != null) {
-          final rowTripId = (newRow['trip_id'] as num?)?.toInt();
+          final rowTripId = newRow['trip_id']?.toString();
           if (rowTripId == tripId) {
             onMessage(ChatMessage.fromMap(newRow));
           }

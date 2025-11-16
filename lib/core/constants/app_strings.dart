@@ -3,6 +3,9 @@ class AppStrings {
   static const appTitle = 'Tu Flota';
   static const login = 'Login';
   static const signIn = 'Sign in';
+  static const registerAsPassenger = 'Register as Passenger';
+  static const password = 'Password';
+  static const emailPasswordRequired = 'Email and password are required';
   static const required = 'Required';
   static const yes = 'Yes';
   static const no = 'No';
@@ -14,7 +17,10 @@ class AppStrings {
   static const loading = 'Loading';
   static const error = 'Error';
   static const success = 'Success';
+  static const signOut = 'Sign out';
   static const cancelLabel = 'Cancel';
+  static const featureComingSoon = 'Feature coming soon';
+  static const actionFailed = 'Action failed';
 
   // Company
   static const companyDashboard = 'Company Dashboard';
@@ -60,6 +66,8 @@ class AppStrings {
   static const editTrip = 'Edit Trip';
   static const origin = 'Origin';
   static const destination = 'Destination';
+  static const search = 'Search';
+  static const noTrips = 'No trips';
   static const departureTimeIso = 'Departure Time (ISO)';
   static const arrivalTimeIso = 'Arrival Time (ISO)';
   static const price = 'Price';
@@ -69,6 +77,8 @@ class AppStrings {
   static const vehicleId = 'Vehicle ID';
   static const additionalInfo = 'Additional Info';
   static const reservations = 'Reservations';
+  static const activeReservations = 'Active Reservations';
+  static const noActiveReservations = 'No active reservations';
   static const noReservations = 'No reservations';
   static const scheduleDeleted = 'Schedule deleted';
   static const pickDate = 'Pick date';
@@ -76,6 +86,8 @@ class AppStrings {
   static const departure = 'Departure';
   static const arrival = 'Arrival';
   static const seats = 'Seats';
+  static const seatsToReserve = 'Seats to reserve';
+  static const reserve = 'Reserve';
   static const vehicle = 'Vehicle';
   static const info = 'Info';
   static const passenger = 'Passenger';
@@ -92,4 +104,7 @@ class AppStrings {
   static const statDrivers = 'Drivers';
   static const statSchedules = 'Schedules';
   static const statReservations = 'Reservations';
+  static const passengerDashboard = 'Passenger Dashboard';
+  static const tripDetail = 'Trip Detail';
+  static const driverDashboard = 'Driver Dashboard';
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_flota/core/constants/app_strings.dart';
 import 'package:tu_flota/features/company/controllers/company_controller.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
+import 'dart:convert';
 
 class CompanyEditTripScreen extends ConsumerStatefulWidget {
   final Object? schedule;
@@ -40,8 +41,8 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
     _availableSeats = TextEditingController(text: _s.availableSeats.toString());
     _totalSeats = TextEditingController(text: _s.totalSeats.toString());
     _vehicleType = TextEditingController(text: _s.vehicleType ?? '');
-    _vehicleId = TextEditingController(text: _s.vehicleId?.toString() ?? '');
-    _additionalInfo = TextEditingController(text: _s.additionalInfo ?? '');
+    _vehicleId = TextEditingController(text: _s.vehicleId ?? '');
+    _additionalInfo = TextEditingController(text: jsonEncode(_s.additionalInfo ?? {}));
     _isActive = _s.isActive;
   }
 
@@ -73,14 +74,19 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
       availableSeats: int.tryParse(_availableSeats.text.trim()) ?? _s.availableSeats,
       totalSeats: int.tryParse(_totalSeats.text.trim()) ?? _s.totalSeats,
       vehicleType: _vehicleType.text.trim().isEmpty ? null : _vehicleType.text.trim(),
-      vehicleId: int.tryParse(_vehicleId.text.trim()),
+      vehicleId: _vehicleId.text.trim().isEmpty ? null : _vehicleId.text.trim(),
       isActive: _isActive,
-      additionalInfo: _additionalInfo.text.trim().isEmpty ? null : _additionalInfo.text.trim(),
+      additionalInfo: _parseJsonOrKeep(_s.additionalInfo, _additionalInfo.text.trim()),
     );
-    await ref.read(companyControllerProvider.notifier).updateSchedule(updated);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.success)));
-    Navigator.pop(context);
+    try {
+      await ref.read(companyControllerProvider.notifier).updateSchedule(updated);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.success)));
+      Navigator.pushNamedAndRemoveUntil(context, '/company/dashboard', (route) => false);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.actionFailed)));
+    }
   }
 
   Future<void> _pickDateTime({required bool isDeparture}) async {
@@ -153,7 +159,7 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
               TextFormField(controller: _availableSeats, decoration: const InputDecoration(labelText: AppStrings.availableSeats), keyboardType: TextInputType.number),
               TextFormField(controller: _totalSeats, decoration: const InputDecoration(labelText: AppStrings.totalSeats), keyboardType: TextInputType.number),
               TextFormField(controller: _vehicleType, decoration: const InputDecoration(labelText: AppStrings.vehicleType)),
-              TextFormField(controller: _vehicleId, decoration: const InputDecoration(labelText: AppStrings.vehicleId), keyboardType: TextInputType.number),
+              TextFormField(controller: _vehicleId, decoration: const InputDecoration(labelText: AppStrings.vehicleId), keyboardType: TextInputType.text),
               TextFormField(controller: _additionalInfo, decoration: const InputDecoration(labelText: AppStrings.additionalInfo)),
               const SizedBox(height: 12),
               SwitchListTile(title: const Text(AppStrings.active), value: _isActive, onChanged: (v) => setState(() => _isActive = v)),
@@ -166,3 +172,12 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
 
   String? _req(String? v) => (v == null || v.trim().isEmpty) ? AppStrings.required : null;
 }
+  Map<String, dynamic>? _parseJsonOrKeep(Map<String, dynamic>? fallback, String s) {
+    if (s.isEmpty) return fallback;
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return decoded.map((k, v) => MapEntry(k.toString(), v));
+    } catch (_) {}
+    return fallback;
+  }

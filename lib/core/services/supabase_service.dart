@@ -37,18 +37,51 @@ class SupabaseService {
   User? get currentUser => client.auth.currentUser;
 
   Future<AuthResponse> signIn(String email, String password) async {
-    return await client.auth.signInWithPassword(
+    final res = await client.auth.signInWithPassword(
       email: email,
       password: password,
     );
+    final user = res.user;
+    if (user != null) {
+      // Ensure SQL row exists but do NOT override existing role on sign-in
+      final existing = await client
+          .from('users')
+          .select('id, role')
+          .eq('id', user.id)
+          .maybeSingle();
+      final metaRole = user.userMetadata?['role']?.toString();
+      if (existing == null) {
+        await client.from('users').insert({
+          'id': user.id,
+          'email': user.email ?? email,
+          'password_hash': 'auth_managed',
+          'role': metaRole ?? 'pasajero',
+        });
+      } else {
+        final dbRole = (existing['role'] as String?);
+        if (metaRole != null && dbRole != metaRole) {
+          // Sync role from auth metadata to SQL users table when mismatched
+          await client
+              .from('users')
+              .update({'role': metaRole})
+              .eq('id', user.id);
+        }
+      }
+    }
+    return res;
   }
 
   Future<AuthResponse> signUp(String email, String password, String role) async {
-    return await client.auth.signUp(
+    final res = await client.auth.signUp(
       email: email,
       password: password,
       data: {'role': role},
     );
+    final user = res.user;
+    if (user != null) {
+      await ensureSqlUserRow(userId: user.id, email: email, role: role);
+    }
+    return res;
   }
 
   Future<void> signOut() async {
@@ -63,6 +96,23 @@ class SupabaseService {
         .eq('id', userId)
         .maybeSingle();
     if (res == null) return null;
-    return res['role'] as String?;
+    final v = res['role'];
+    return v == null ? null : v.toString();
+  }
+
+  // Ensure a corresponding row exists in SQL public.users
+  Future<void> ensureSqlUserRow({
+    required String userId,
+    required String email,
+    required String role,
+  }) async {
+    await client
+        .from('users')
+        .upsert({
+          'id': userId,
+          'email': email,
+          'password_hash': 'auth_managed',
+          'role': role,
+        }, onConflict: 'id');
   }
 }

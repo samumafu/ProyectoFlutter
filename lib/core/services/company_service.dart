@@ -20,6 +20,23 @@ class CompanyService {
     return Company.fromMap(data);
   }
 
+  Future<Company?> fetchCompanyByEmail(String email) async {
+    final data = await client
+        .from('companies')
+        .select()
+        .ilike('email', email)
+        .maybeSingle();
+    if (data == null) return null;
+    return Company.fromMap(data);
+  }
+
+  Future<List<Company>> listCompanies() async {
+    final data = await client.from('companies').select();
+    return (data as List)
+        .map((e) => Company.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<Company> updateCompany(Company company) async {
     final updated = await client
         .from('companies')
@@ -27,7 +44,10 @@ class CompanyService {
         .eq('id', company.id)
         .select()
         .maybeSingle();
-    return Company.fromMap(updated ?? company.toMap());
+    if (updated == null) {
+      throw Exception('Update company failed');
+    }
+    return Company.fromMap(updated);
   }
 
   Future<String?> uploadCompanyLogo({
@@ -70,7 +90,10 @@ class CompanyService {
         .eq('id', driver.id)
         .select()
         .maybeSingle();
-    return Driver.fromMap(updated ?? driver.toMap());
+    if (updated == null) {
+      throw Exception('Update driver failed');
+    }
+    return Driver.fromMap(updated);
   }
 
   Future<void> deleteDriver(int id) async {

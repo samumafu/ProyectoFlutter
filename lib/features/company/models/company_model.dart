@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class Company {
   final String id;
   final String name;
@@ -26,21 +28,48 @@ class Company {
   });
 
   factory Company.fromMap(Map<String, dynamic> map) {
+    String _asString(dynamic v) {
+      if (v == null) return '';
+      if (v is String) return v;
+      if (v is Map || v is List) {
+        try {
+          return jsonEncode(v);
+        } catch (_) {
+          return v.toString();
+        }
+      }
+      return v.toString();
+    }
+    Map<String, dynamic>? _asJsonMap(dynamic v) {
+      if (v == null) return null;
+      if (v is Map<String, dynamic>) return v;
+      if (v is Map) {
+        return v.map((k, val) => MapEntry(k.toString(), val));
+      }
+      if (v is String) {
+        try {
+          final decoded = jsonDecode(v);
+          if (decoded is Map<String, dynamic>) return decoded;
+          if (decoded is Map) {
+            return decoded.map((k, val) => MapEntry(k.toString(), val));
+          }
+        } catch (_) {}
+      }
+      return {'value': v};
+    }
+
     return Company(
-      id: map['id'] as String,
-      name: map['name'] as String,
-      email: map['email'] as String,
-      phone: map['phone'] as String?,
-      address: map['address'] as String?,
-      nit: map['nit'] as String?,
-      description: map['description'] as String?,
-      logoUrl: map['logo_url'] as String?,
+      id: _asString(map['id']),
+      name: _asString(map['name']),
+      email: _asString(map['email']),
+      phone: (map['phone'] == null) ? null : _asString(map['phone']),
+      address: (map['address'] == null) ? null : _asString(map['address']),
+      nit: (map['nit'] == null) ? null : _asString(map['nit']),
+      description: (map['description'] == null) ? null : _asString(map['description']),
+      logoUrl: (map['logo_url'] == null) ? null : _asString(map['logo_url']),
       isActive: (map['is_active'] as bool?) ?? false,
-      routes: (map['routes'] as List?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
-      settings: map['settings'] as Map<String, dynamic>?,
+      routes: (map['routes'] as List?)?.map((e) => e.toString()).toList() ?? const [],
+      settings: _asJsonMap(map['settings']),
     );
   }
 

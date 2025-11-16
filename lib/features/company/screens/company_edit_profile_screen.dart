@@ -77,8 +77,15 @@ class _CompanyEditProfileScreenState extends ConsumerState<CompanyEditProfileScr
       settings: settings,
       isActive: _isActive,
     );
-    await ref.read(companyControllerProvider.notifier).updateCompanyProfile(updated);
-    if (mounted) Navigator.pop(context);
+    try {
+      await ref.read(companyControllerProvider.notifier).updateCompanyProfile(updated);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.success)));
+      Navigator.pushNamedAndRemoveUntil(context, '/company/dashboard', (route) => false);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.actionFailed)));
+    }
   }
 
   @override

@@ -3,7 +3,7 @@ import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 
 typedef OnScheduleInsert = void Function(CompanySchedule schedule);
 typedef OnScheduleUpdate = void Function(CompanySchedule schedule);
-typedef OnScheduleDelete = void Function(int id);
+typedef OnScheduleDelete = void Function(String id);
 
 class TripService {
   final SupabaseClient client;
@@ -20,7 +20,7 @@ class TripService {
         .toList();
   }
 
-  Future<CompanySchedule?> getScheduleById(int id) async {
+  Future<CompanySchedule?> getScheduleById(String id) async {
     final data = await client
         .from('company_schedules')
         .select()
@@ -30,9 +30,11 @@ class TripService {
   }
 
   Future<CompanySchedule> createSchedule(CompanySchedule schedule) async {
+    // Do not send 'id' on insert; let DB assign it
+    final insertMap = Map<String, dynamic>.from(schedule.toMap())..remove('id');
     final inserted = await client
         .from('company_schedules')
-        .insert(schedule.toMap())
+        .insert(insertMap)
         .select()
         .maybeSingle();
     return CompanySchedule.fromMap(inserted!);
@@ -45,11 +47,34 @@ class TripService {
         .eq('id', schedule.id)
         .select()
         .maybeSingle();
-    return CompanySchedule.fromMap(updated ?? schedule.toMap());
+    if (updated == null) {
+      throw Exception('Update schedule failed');
+    }
+    return CompanySchedule.fromMap(updated);
   }
 
-  Future<void> deleteSchedule(int id) async {
+  Future<void> deleteSchedule(String id) async {
     await client.from('company_schedules').delete().eq('id', id);
+  }
+
+  Future<int> decrementAvailableSeats(String scheduleId, int seatsToSubtract) async {
+    final current = await getScheduleById(scheduleId);
+    if (current == null) {
+      throw Exception('Schedule not found');
+    }
+    final int newAvailable = (current.availableSeats - seatsToSubtract) < 0
+        ? 0
+        : current.availableSeats - seatsToSubtract;
+    final updated = await client
+        .from('company_schedules')
+        .update({'available_seats': newAvailable})
+        .eq('id', scheduleId)
+        .select()
+        .maybeSingle();
+    if (updated == null) {
+      throw Exception('Failed to update available seats');
+    }
+    return newAvailable;
   }
 
   // Realtime subscription for company_schedules
@@ -83,8 +108,8 @@ class TripService {
         table: 'company_schedules',
         callback: (payload) {
           final oldRow = payload.oldRecord;
-          if (oldRow != null) onDelete(oldRow['id'] as int);
-        },
+          if (oldRow != null) onDelete(oldRow['id'] as String);
+      },
       );
     channel.subscribe();
     return channel;

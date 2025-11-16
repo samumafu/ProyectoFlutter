@@ -1,5 +1,7 @@
+import 'dart:convert';
+
 class CompanySchedule {
-  final int id;
+  final String id;
   final String companyId;
   final String origin;
   final String destination;
@@ -9,9 +11,9 @@ class CompanySchedule {
   final int availableSeats;
   final int totalSeats;
   final String? vehicleType;
-  final int? vehicleId;
+  final String? vehicleId;
   final bool isActive;
-  final String? additionalInfo;
+  final Map<String, dynamic>? additionalInfo;
 
   const CompanySchedule({
     required this.id,
@@ -30,20 +32,70 @@ class CompanySchedule {
   });
 
   factory CompanySchedule.fromMap(Map<String, dynamic> map) {
+    String? _asString(dynamic v) {
+      if (v == null) return null;
+      if (v is String) return v;
+      if (v is Map || v is List) {
+        try {
+          return jsonEncode(v);
+        } catch (_) {
+          return v.toString();
+        }
+      }
+      return v.toString();
+    }
+    int _asInt(dynamic v) {
+      if (v == null) return 0;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString()) ?? 0;
+    }
+
+    double _asDouble(dynamic v) {
+      if (v == null) return 0;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString()) ?? 0;
+    }
+
+    bool _asBool(dynamic v) {
+      if (v == null) return false;
+      if (v is bool) return v;
+      if (v is num) return v != 0;
+      final s = v.toString().toLowerCase();
+      return s == 'true' || s == 't' || s == '1';
+    }
+
+    Map<String, dynamic>? _asJsonMap(dynamic v) {
+      if (v == null) return null;
+      if (v is Map<String, dynamic>) return v;
+      if (v is Map) {
+        return v.map((key, value) => MapEntry(key.toString(), value));
+      }
+      if (v is String) {
+        try {
+          final decoded = jsonDecode(v);
+          if (decoded is Map<String, dynamic>) return decoded;
+          if (decoded is Map) {
+            return decoded.map((k, val) => MapEntry(k.toString(), val));
+          }
+        } catch (_) {}
+      }
+      return {'value': v};
+    }
+
     return CompanySchedule(
-      id: (map['id'] as num).toInt(),
-      companyId: map['company_id'] as String,
-      origin: map['origin'] as String,
-      destination: map['destination'] as String,
-      departureTime: map['departure_time'] as String,
-      arrivalTime: map['arrival_time'] as String,
-      price: (map['price'] as num).toDouble(),
-      availableSeats: (map['available_seats'] as num).toInt(),
-      totalSeats: (map['total_seats'] as num).toInt(),
-      vehicleType: map['vehicle_type'] as String?,
-      vehicleId: (map['vehicle_id'] as num?)?.toInt(),
-      isActive: (map['is_active'] as bool?) ?? false,
-      additionalInfo: map['additional_info'] as String?,
+      id: _asString(map['id']) ?? '',
+      companyId: _asString(map['company_id']) ?? '',
+      origin: _asString(map['origin']) ?? '',
+      destination: _asString(map['destination']) ?? '',
+      departureTime: _asString(map['departure_time']) ?? '',
+      arrivalTime: _asString(map['arrival_time']) ?? '',
+      price: _asDouble(map['price']),
+      availableSeats: _asInt(map['available_seats']),
+      totalSeats: _asInt(map['total_seats']),
+      vehicleType: _asString(map['vehicle_type']),
+      vehicleId: _asString(map['vehicle_id']),
+      isActive: _asBool(map['is_active']),
+      additionalInfo: _asJsonMap(map['additional_info']),
     );
   }
 
@@ -67,8 +119,8 @@ class CompanySchedule {
 }
 
 class Reservation {
-  final int id;
-  final int tripId;
+  final String id;
+  final String tripId;
   final String passengerId;
   final int seatsReserved;
   final double totalPrice;
@@ -85,8 +137,8 @@ class Reservation {
 
   factory Reservation.fromMap(Map<String, dynamic> map) {
     return Reservation(
-      id: (map['id'] as num).toInt(),
-      tripId: (map['trip_id'] as num).toInt(),
+      id: map['id'] as String,
+      tripId: map['trip_id'] as String,
       passengerId: map['passenger_id'] as String,
       seatsReserved: (map['seats_reserved'] as num).toInt(),
       totalPrice: (map['total_price'] as num).toDouble(),
@@ -107,8 +159,8 @@ class Reservation {
 }
 
 class ChatMessage {
-  final int id;
-  final int tripId;
+  final String id;
+  final String tripId;
   final String senderId;
   final String message;
 
@@ -121,8 +173,8 @@ class ChatMessage {
 
   factory ChatMessage.fromMap(Map<String, dynamic> map) {
     return ChatMessage(
-      id: (map['id'] as num).toInt(),
-      tripId: (map['trip_id'] as num).toInt(),
+      id: map['id'] as String,
+      tripId: map['trip_id'] as String,
       senderId: map['sender_id'] as String,
       message: map['message'] as String,
     );

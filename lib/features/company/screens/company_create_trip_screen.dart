@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_flota/core/constants/app_strings.dart';
 import 'package:tu_flota/features/company/controllers/company_controller.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
+import 'dart:convert';
 
 class CompanyCreateTripScreen extends ConsumerStatefulWidget {
   const CompanyCreateTripScreen({super.key});
@@ -45,7 +46,7 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
     final companyId = ref.read(companyControllerProvider).company?.id;
     if (companyId == null) return;
     final schedule = CompanySchedule(
-      id: 0,
+      id: '',
       companyId: companyId,
       origin: _origin.text.trim(),
       destination: _destination.text.trim(),
@@ -55,14 +56,32 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
       availableSeats: int.tryParse(_availableSeats.text.trim()) ?? 0,
       totalSeats: int.tryParse(_totalSeats.text.trim()) ?? 0,
       vehicleType: _vehicleType.text.trim().isEmpty ? null : _vehicleType.text.trim(),
-      vehicleId: int.tryParse(_vehicleId.text.trim()),
+      vehicleId: _vehicleId.text.trim().isEmpty ? null : _vehicleId.text.trim(),
       isActive: _isActive,
-      additionalInfo: _additionalInfo.text.trim().isEmpty ? null : _additionalInfo.text.trim(),
+      additionalInfo: _additionalInfo.text.trim().isEmpty
+          ? null
+          : _parseJsonOrNull(_additionalInfo.text.trim()),
     );
-    await ref.read(companyControllerProvider.notifier).createSchedule(schedule);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.success)));
-    Navigator.pop(context);
+    try {
+      await ref.read(companyControllerProvider.notifier).createSchedule(schedule);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.success)));
+      Navigator.pushNamedAndRemoveUntil(context, '/company/dashboard', (route) => false);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(AppStrings.actionFailed)));
+    }
+  }
+
+  Map<String, dynamic>? _parseJsonOrNull(String s) {
+    try {
+      final decoded = jsonDecode(s);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) {
+        return decoded.map((k, v) => MapEntry(k.toString(), v));
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> _pickDateTime({required bool isDeparture}) async {
@@ -135,7 +154,7 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
               TextFormField(controller: _availableSeats, decoration: const InputDecoration(labelText: AppStrings.availableSeats), keyboardType: TextInputType.number),
               TextFormField(controller: _totalSeats, decoration: const InputDecoration(labelText: AppStrings.totalSeats), keyboardType: TextInputType.number),
               TextFormField(controller: _vehicleType, decoration: const InputDecoration(labelText: AppStrings.vehicleType)),
-              TextFormField(controller: _vehicleId, decoration: const InputDecoration(labelText: AppStrings.vehicleId), keyboardType: TextInputType.number),
+              TextFormField(controller: _vehicleId, decoration: const InputDecoration(labelText: AppStrings.vehicleId), keyboardType: TextInputType.text),
               TextFormField(controller: _additionalInfo, decoration: const InputDecoration(labelText: AppStrings.additionalInfo)),
               const SizedBox(height: 12),
               SwitchListTile(title: const Text(AppStrings.active), value: _isActive, onChanged: (v) => setState(() => _isActive = v)),
