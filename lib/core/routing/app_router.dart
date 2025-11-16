@@ -241,6 +241,30 @@ class _LoginScreenState extends ConsumerState<_LoginScreen> {
                           onPressed: _isLoading ? null : _signUpPassenger,
                           child: const Text(AppStrings.registerAsPassenger),
                         ),
+                        const SizedBox(height: 12),
+                        ElevatedButton(
+                          onPressed: _isLoading
+                              ? null
+                              : () async {
+                                  final email = _emailCtrl.text.trim();
+                                  final password = _passwordCtrl.text.trim();
+                                  if (email.isEmpty || password.isEmpty) {
+                                    setState(() => _error = AppStrings.emailPasswordRequired);
+                                    return;
+                                  }
+                                  setState(() { _isLoading = true; _error = null; });
+                                  try {
+                                    await SupabaseService().signUp(email, password, 'conductor');
+                                    if (!mounted) return;
+                                    Navigator.pushReplacementNamed(context, '/driver/dashboard');
+                                  } catch (e) {
+                                    setState(() => _error = e.toString());
+                                  } finally {
+                                    if (mounted) setState(() => _isLoading = false);
+                                  }
+                                },
+                          child: const Text(AppStrings.registerAsDriver),
+                        ),
                       ] else ...[
                         Row(
                           children: [
@@ -255,6 +279,32 @@ class _LoginScreenState extends ConsumerState<_LoginScreen> {
                               child: ElevatedButton(
                                 onPressed: _isLoading ? null : _signUpPassenger,
                                 child: const Text(AppStrings.registerAsPassenger),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: _isLoading
+                                    ? null
+                                    : () async {
+                                        final email = _emailCtrl.text.trim();
+                                        final password = _passwordCtrl.text.trim();
+                                        if (email.isEmpty || password.isEmpty) {
+                                          setState(() => _error = AppStrings.emailPasswordRequired);
+                                          return;
+                                        }
+                                        setState(() { _isLoading = true; _error = null; });
+                                        try {
+                                          await SupabaseService().signUp(email, password, 'conductor');
+                                          if (!mounted) return;
+                                          Navigator.pushReplacementNamed(context, '/driver/dashboard');
+                                        } catch (e) {
+                                          setState(() => _error = e.toString());
+                                        } finally {
+                                          if (mounted) setState(() => _isLoading = false);
+                                        }
+                                      },
+                                child: const Text(AppStrings.registerAsDriver),
                               ),
                             ),
                           ],

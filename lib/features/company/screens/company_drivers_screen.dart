@@ -32,60 +32,73 @@ class _CompanyDriversScreenState extends ConsumerState<CompanyDriversScreen> {
         onPressed: () => Navigator.pushNamed(context, '/company/driver/add'),
         child: const Icon(Icons.person_add),
       ),
-      body: state.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: state.drivers.length,
-              itemBuilder: (context, index) {
-                final d = state.drivers[index];
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  child: ListTile(
-                    leading: CircleAvatar(child: Text(d.name.isNotEmpty ? d.name[0] : '?')),
-                    title: Text(d.name),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (d.phone != null) Text('${AppStrings.phone}: ${d.phone}'),
-                        if (d.autoModel != null) Text('${AppStrings.vehicleModel}: ${d.autoModel} ${d.autoColor ?? ''}'),
-                        if (d.autoPlate != null) Text('${AppStrings.plate}: ${d.autoPlate}'),
-                        if (d.rating != null) Text('${AppStrings.rating}: ${d.rating}'),
-                      ],
+      body: SafeArea(
+        child: state.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final isNarrow = constraints.maxWidth < 480;
+                  final pad = isNarrow ? const EdgeInsets.all(8) : const EdgeInsets.symmetric(horizontal: 16, vertical: 12);
+                  return Padding(
+                    padding: pad,
+                    child: ListView.builder(
+                      itemCount: state.drivers.length,
+                      itemBuilder: (context, index) {
+                        final d = state.drivers[index];
+                        return Card(
+                          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          child: ListTile(
+                            leading: CircleAvatar(child: Text(d.name.isNotEmpty ? d.name[0] : '?')),
+                            title: Text(d.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (d.phone != null) Text('${AppStrings.phone}: ${d.phone}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                if (d.autoModel != null) Text('${AppStrings.vehicleModel}: ${d.autoModel} ${d.autoColor ?? ''}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                if (d.autoPlate != null) Text('${AppStrings.plate}: ${d.autoPlate}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                if (d.rating != null) Text('${AppStrings.rating}: ${d.rating}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                            trailing: Wrap(
+                              spacing: 4,
+                              runSpacing: 4,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Switch(
+                                  value: d.available,
+                                  onChanged: (value) => ref
+                                      .read(companyControllerProvider.notifier)
+                                      .toggleDriverAvailability(d.id, value),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: () async {
+                                    await ref
+                                        .read(companyControllerProvider.notifier)
+                                        .deleteDriver(d.id);
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(const SnackBar(content: Text(AppStrings.driverDeleted)));
+                                    }
+                                  },
+                                )
+                              ],
+                            ),
+                            onTap: () {
+                              Navigator.pushNamed(
+                                context,
+                                '/company/driver/edit',
+                                arguments: d,
+                              );
+                            },
+                          ),
+                        );
+                      },
                     ),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Switch(
-                          value: d.available,
-                          onChanged: (value) => ref
-                              .read(companyControllerProvider.notifier)
-                              .toggleDriverAvailability(d.id, value),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () async {
-                            await ref
-                                .read(companyControllerProvider.notifier)
-                                .deleteDriver(d.id);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(const SnackBar(content: Text(AppStrings.driverDeleted)));
-                            }
-                          },
-                        )
-                      ],
-                    ),
-                    onTap: () {
-                      Navigator.pushNamed(
-                        context,
-                        '/company/driver/edit',
-                        arguments: d,
-                      );
-                    },
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }

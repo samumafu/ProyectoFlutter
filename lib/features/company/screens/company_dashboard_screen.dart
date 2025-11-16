@@ -91,11 +91,7 @@ class CompanyDashboardScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 12),
                               ElevatedButton(
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text(AppStrings.featureComingSoon)),
-                                  );
-                                },
+                                onPressed: () => Navigator.pushNamed(context, '/company/drivers'),
                                 child: const Text(AppStrings.drivers),
                               ),
                               const SizedBox(height: 12),
@@ -114,11 +110,7 @@ class CompanyDashboardScreen extends ConsumerWidget {
                               ),
                               const SizedBox(width: 12),
                               ElevatedButton(
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text(AppStrings.featureComingSoon)),
-                                  );
-                                },
+                                onPressed: () => Navigator.pushNamed(context, '/company/drivers'),
                                 child: const Text(AppStrings.drivers),
                               ),
                               const SizedBox(width: 12),

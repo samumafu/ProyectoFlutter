@@ -51,12 +51,28 @@ class SupabaseService {
           .maybeSingle();
       final metaRole = user.userMetadata?['role']?.toString();
       if (existing == null) {
-        await client.from('users').insert({
-          'id': user.id,
-          'email': user.email ?? email,
-          'password_hash': 'auth_managed',
-          'role': metaRole ?? 'pasajero',
-        });
+        // If there's already a row for this email (with a different id), avoid duplicate key on unique(email)
+        final byEmail = await client
+            .from('users')
+            .select('id, role')
+            .ilike('email', user.email ?? email)
+            .maybeSingle();
+        if (byEmail == null) {
+          await client.from('users').insert({
+            'id': user.id,
+            'email': user.email ?? email,
+            'password_hash': 'auth_managed',
+            'role': metaRole ?? 'pasajero',
+          });
+        } else {
+          final dbRole = (byEmail['role'] as String?);
+          if (metaRole != null && dbRole != metaRole) {
+            await client
+                .from('users')
+                .update({'role': metaRole})
+                .ilike('email', user.email ?? email);
+          }
+        }
       } else {
         final dbRole = (existing['role'] as String?);
         if (metaRole != null && dbRole != metaRole) {
@@ -90,13 +106,35 @@ class SupabaseService {
 
   // Fetch user role from SQL users table (source of truth)
   Future<String?> fetchUserRoleById(String userId) async {
-    final res = await client
+    var res = await client
         .from('users')
         .select('role')
         .eq('id', userId)
         .maybeSingle();
+    if (res == null) {
+      final email = client.auth.currentUser?.email;
+      if (email != null) {
+        res = await client
+            .from('users')
+            .select('role')
+            .ilike('email', email)
+            .maybeSingle();
+      }
+    }
     if (res == null) return null;
     final v = res['role'];
+    return v == null ? null : v.toString();
+  }
+
+  // Find SQL user id by email (case-insensitive)
+  Future<String?> findUserIdByEmail(String email) async {
+    final res = await client
+        .from('users')
+        .select('id')
+        .ilike('email', email)
+        .maybeSingle();
+    if (res == null) return null;
+    final v = res['id'];
     return v == null ? null : v.toString();
   }
 

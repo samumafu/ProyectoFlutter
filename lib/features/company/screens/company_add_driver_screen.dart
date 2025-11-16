@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_flota/core/constants/app_strings.dart';
+import 'package:tu_flota/core/services/supabase_service.dart';
 import 'package:tu_flota/features/company/controllers/company_controller.dart';
 import 'package:tu_flota/features/company/models/company_model.dart';
 
@@ -13,6 +14,7 @@ class CompanyAddDriverScreen extends ConsumerStatefulWidget {
 
 class _CompanyAddDriverScreenState extends ConsumerState<CompanyAddDriverScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _email = TextEditingController();
   final _name = TextEditingController();
   final _phone = TextEditingController();
   final _autoModel = TextEditingController();
@@ -38,6 +40,7 @@ class _CompanyAddDriverScreenState extends ConsumerState<CompanyAddDriverScreen>
 
   @override
   void dispose() {
+    _email.dispose();
     _name.dispose();
     _phone.dispose();
     _autoModel.dispose();
@@ -48,12 +51,27 @@ class _CompanyAddDriverScreenState extends ConsumerState<CompanyAddDriverScreen>
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    final userId = ref.read(companyControllerProvider).user?.id;
-    if (userId == null) return;
+    String? linkedUserId;
+    if (_editing == null) {
+      final email = _email.text.trim();
+      if (email.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStrings.required)),
+        );
+        return;
+      }
+      linkedUserId = await SupabaseService().findUserIdByEmail(email);
+      if (linkedUserId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text(AppStrings.driverAccountNotFound)),
+        );
+        return;
+      }
+    }
     if (_editing == null) {
       final driver = Driver(
         id: 0,
-        userId: userId,
+        userId: linkedUserId!,
         name: _name.text.trim(),
         phone: _phone.text.trim().isEmpty ? null : _phone.text.trim(),
         autoModel: _autoModel.text.trim().isEmpty ? null : _autoModel.text.trim(),
@@ -101,6 +119,12 @@ class _CompanyAddDriverScreenState extends ConsumerState<CompanyAddDriverScreen>
           padding: const EdgeInsets.all(16),
           child: Column(
             children: [
+              if (_editing == null)
+                TextFormField(
+                  controller: _email,
+                  decoration: const InputDecoration(labelText: AppStrings.driverEmail),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? AppStrings.required : null,
+                ),
               TextFormField(
                 controller: _name,
                 decoration: const InputDecoration(labelText: AppStrings.name),

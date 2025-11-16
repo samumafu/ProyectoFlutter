@@ -4,6 +4,7 @@ class AppStrings {
   static const login = 'Login';
   static const signIn = 'Sign in';
   static const registerAsPassenger = 'Register as Passenger';
+  static const registerAsDriver = 'Register as Driver';
   static const password = 'Password';
   static const emailPasswordRequired = 'Email and password are required';
   static const required = 'Required';
@@ -52,6 +53,8 @@ class AppStrings {
   static const editDriver = 'Edit Driver';
   static const driver = 'Driver';
   static const drivers = 'Drivers';
+  static const driverEmail = 'Driver Email';
+  static const driverAccountNotFound = 'Driver account not found';
   static const vehicleModel = 'Vehicle Model';
   static const vehicleColor = 'Vehicle Color';
   static const plate = 'Plate';
