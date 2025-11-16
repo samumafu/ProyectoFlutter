@@ -9,16 +9,24 @@ import 'package:tu_flota/core/services/trip_service.dart';
 import 'package:tu_flota/core/services/reservation_service.dart';
 import 'package:tu_flota/core/services/chat_service.dart';
 import 'package:tu_flota/core/services/supabase_service.dart';
-import 'package:tu_flota/features/company/models/company_model.dart';
+
+// 🚨 CORRECCIONES DE IMPORTACIÓN:
+// 1. Importación del modelo Driver (que movimos a su propia carpeta)
+import 'package:tu_flota/features/driver/models/driver_model.dart'; 
+// 2. Importación de Company (que está en su ruta original)
+import 'package:tu_flota/features/company/models/company_model.dart'; 
+// 3. Importaciones de modelos que tu controlador usa pero que no estaban listada
+
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
+
 
 class CompanyState {
   final UserModel? user;
   final Company? company;
-  final List<Driver> drivers;
+  final List<Driver> drivers; // Ahora encuentra Driver
   final List<CompanySchedule> schedules;
-  final Map<String, List<Reservation>> reservationsBySchedule;
-  final Map<String, List<ChatMessage>> messagesByTrip;
+  final Map<String, List<Reservation>> reservationsBySchedule; // Ahora encuentra Reservation
+  final Map<String, List<ChatMessage>> messagesByTrip; // Ahora encuentra ChatMessage
   final bool isLoading;
   final String? error;
 
@@ -36,7 +44,7 @@ class CompanyState {
   CompanyState copyWith({
     UserModel? user,
     Company? company,
-    List<Driver>? drivers,
+    List<Driver>? drivers, // Ahora encuentra Driver
     List<CompanySchedule>? schedules,
     Map<String, List<Reservation>>? reservationsBySchedule,
     Map<String, List<ChatMessage>>? messagesByTrip,
