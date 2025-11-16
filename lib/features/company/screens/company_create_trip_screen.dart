@@ -101,18 +101,21 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
 
   Future<void> _pickDateTime({required bool isDeparture}) async {
     final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
+    // 'today' es medianoche de hoy, usado para firstDate (el límite mínimo de selección)
+    final today = DateTime(now.year, now.month, now.day); 
     
-    // --- 1. Pick Date ---
+    // --- 1. Setting Date Restrictions ---
     DateTime initialDate;
     DateTime firstDateRestriction;
 
     if (isDeparture) {
-      initialDate = _departureDateTime ?? now;
-      // RULE 1: Departure's first selectable day is today.
+      // CORRECCIÓN CLAVE: Usamos 'now' como fecha inicial si no hay una previa. 
+      // Esto asegura que el picker se abra en la fecha de HOY.
+      initialDate = _departureDateTime ?? now; 
+      // RULE 1: Departure must be TODAY or later (medianoche de hoy).
       firstDateRestriction = today; 
     } else {
-      // RULE 2: Arrival's first selectable day is the Departure date.
+      // RULE 2: Check if departure time is set
       if (_departureDateTime == null) {
          if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -121,6 +124,7 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
         }
         return;
       }
+      // RULE 2.1: Arrival's first selectable day is the Departure date.
       firstDateRestriction = DateTime(_departureDateTime!.year, _departureDateTime!.month, _departureDateTime!.day);
       initialDate = _arrivalDateTime ?? _departureDateTime!.add(const Duration(hours: 1));
     }
@@ -128,14 +132,25 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
     final date = await showDatePicker(
       context: context,
       initialDate: initialDate,
-      firstDate: firstDateRestriction, // <-- APPLYING STRICT CALENDAR RESTRICTION HERE
+      firstDate: firstDateRestriction, 
       lastDate: DateTime(now.year + 2),
       helpText: AppStrings.pickDate,
     );
     if (date == null) return;
 
     // --- 2. Pick Time ---
-    TimeOfDay initialTime = TimeOfDay.fromDateTime(initialDate);
+    
+    // AJUSTE CRÍTICO: Definimos initialTime usando 'date' y la hora previamente seleccionada (si existe) o la hora actual.
+    DateTime initialDateTimeForTimePicker;
+    if (isDeparture) {
+        // Si es salida, usamos el tiempo guardado (si existe) o la hora actual para el día de hoy.
+        initialDateTimeForTimePicker = _departureDateTime != null && date == initialDate ? _departureDateTime! : now;
+    } else {
+        // Si es llegada, usamos el tiempo guardado (si existe) o el tiempo de salida + 1 hora.
+        initialDateTimeForTimePicker = _arrivalDateTime ?? _departureDateTime!.add(const Duration(hours: 1));
+    }
+
+    TimeOfDay initialTime = TimeOfDay.fromDateTime(initialDateTimeForTimePicker);
 
     final time = await showTimePicker(
       context: context,
@@ -144,6 +159,7 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
     );
     if (time == null) return;
     
+    // *** VARIABLE DEFINIDA AQUÍ ***
     final pickedDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     
     // --- 3. Core Logic: Departure Validation (Today + Future Time) ---
@@ -152,21 +168,19 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
                                 pickedDateTime.month == now.month && 
                                 pickedDateTime.day == now.day;
 
-      // RULE 1.1: If the date is TODAY, the time must be AFTER the current time.
+      // RULE 1.1: If the date is TODAY, the time must be AFTER the current time (now).
       if (isPickedDateToday && pickedDateTime.isBefore(now.subtract(const Duration(minutes: 1)))) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Departure time for today must be after the current time (now).')),
-          );
-        }
-        return;
+        // No actualizamos _departureDateTime, por lo que el campo queda vacío y el validador del formulario se activa.
+        _departureDateTime = null; 
+      } else {
+        _departureDateTime = pickedDateTime;
       }
-      _departureDateTime = pickedDateTime;
     } else {
-      // --- 4. Core Logic: Arrival Validation (Must be after Departure) ---
+      // --- 4. Core Logic: Arrival Validation (Must be strictly after Departure) ---
       
-      // RULE 2.1: Arrival time must be strictly after the Departure time.
+      // RULE 2.2: Arrival time must be strictly after the Departure time.
       if (pickedDateTime.isBefore(_departureDateTime!.add(const Duration(minutes: 1)))) {
+        // Mantenemos el SnackBar de error de llegada porque la llegada DEBE seguir a la salida.
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Arrival time must be strictly after the Departure time.')),
@@ -175,6 +189,14 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
         return;
       }
       _arrivalDateTime = pickedDateTime;
+    }
+
+    // Solo actualizamos el estado si la hora de Salida fue válida, o si es la llegada.
+    if (isDeparture && _departureDateTime == null) {
+      // Si la salida no se actualizó (porque la hora era pasada), borramos el campo de texto y salimos.
+      setState(() => _departure.clear());
+      _formKey.currentState!.validate();
+      return;
     }
 
     // Convert DateTime to ISO string format and update UI
@@ -365,10 +387,10 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
                                             tooltip: AppStrings.pickDate,
                                           ),
                                         ),
+                                        // VALIDADOR CLAVE: Muestra el error si se intenta guardar con una hora pasada para hoy.
                                         validator: (v) {
                                           if (_req(v) != null) return _req(v);
                                           final now = DateTime.now();
-                                          // Validation check ensures time is always future if today, or any time if a future date.
                                           if (_departureDateTime == null || (_departureDateTime!.day == now.day && _departureDateTime!.isBefore(now.subtract(const Duration(minutes: 1))))) {
                                             return 'Departure must be after the current time.';
                                           }
