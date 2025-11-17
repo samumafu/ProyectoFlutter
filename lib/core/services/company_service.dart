@@ -85,9 +85,22 @@ class CompanyService {
         .toList();
   }
 
+  Future<List<Driver>> listDriversByCompany(String companyId) async {
+    final data = await client
+        .from('conductores')
+        .select()
+        .eq('company_id', companyId);
+    return (data as List<dynamic>)
+        .map((e) => Driver.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<Driver> createDriver(Driver driver) async {
     final map = driver.toMap();
     map.remove('id');
+    if (map['company_id'] == null) {
+      throw Exception('Missing company_id for driver creation');
+    }
     final inserted = await client
         .from('conductores')
         .insert(map)

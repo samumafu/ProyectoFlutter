@@ -180,7 +180,12 @@ class CompanyController extends StateNotifier<CompanyState> {
   Future<void> loadDrivers() async {
     try {
       state = state.copyWith(isLoading: true, error: null);
-      final drivers = await _companyService.listDrivers();
+      final companyId = state.company?.id;
+      if (companyId == null) {
+        state = state.copyWith(drivers: const [], isLoading: false);
+        return;
+      }
+      final drivers = await _companyService.listDriversByCompany(companyId);
       state = state.copyWith(drivers: drivers, isLoading: false);
       _subscribeDriversRealtime();
     } catch (e) {
@@ -190,7 +195,24 @@ class CompanyController extends StateNotifier<CompanyState> {
 
   Future<void> createDriver(Driver driver) async {
     try {
-      final created = await _companyService.createDriver(driver);
+      final cid = state.company?.id;
+      if (cid == null) {
+        throw Exception('Company is not selected');
+      }
+      final created = await _companyService.createDriver(
+        Driver(
+          id: driver.id,
+          userId: driver.userId,
+          name: driver.name,
+          available: driver.available,
+          phone: driver.phone,
+          autoModel: driver.autoModel,
+          autoColor: driver.autoColor,
+          autoPlate: driver.autoPlate,
+          rating: driver.rating,
+          companyId: cid,
+        ),
+      );
       final updated = [...state.drivers, created];
       state = state.copyWith(drivers: updated);
     } catch (e) {
@@ -368,14 +390,20 @@ class CompanyController extends StateNotifier<CompanyState> {
     _driversChannel?.unsubscribe();
     _driversChannel = _companyService.subscribeDrivers(
       onInsert: (d) {
-        final updated = [...state.drivers, d];
-        state = state.copyWith(drivers: updated);
+        final companyId = state.company?.id;
+        if (companyId != null && d.companyId == companyId) {
+          final updated = [...state.drivers, d];
+          state = state.copyWith(drivers: updated);
+        }
       },
       onUpdate: (d) {
-        final updated = state.drivers
-            .map((e) => e.id == d.id ? d : e)
-            .toList();
-        state = state.copyWith(drivers: updated);
+        final companyId = state.company?.id;
+        if (companyId != null && d.companyId == companyId) {
+          final updated = state.drivers
+              .map((e) => e.id == d.id ? d : e)
+              .toList();
+          state = state.copyWith(drivers: updated);
+        }
       },
       onDelete: (id) {
         final updated = state.drivers.where((e) => e.id != id).toList();
@@ -452,8 +480,14 @@ class CompanyController extends StateNotifier<CompanyState> {
           .filter('trip_id', 'in', inValues);
     }
 
+    final driversRes = await _client
+        .from('conductores')
+        .select('id')
+        .eq('company_id', companyId);
+    final driversCount = (driversRes as List).length;
+
     return {
-      'drivers': state.drivers.length, // until driver-company relation exists
+      'drivers': driversCount,
       'schedules': scheduleIds.length,
       'reservations': (reservationsRes as List).length,
     };
