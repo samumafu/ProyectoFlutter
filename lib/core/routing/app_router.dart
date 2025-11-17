@@ -17,6 +17,9 @@ import 'package:tu_flota/features/passenger/screens/passenger_edit_profile_scree
 import 'package:tu_flota/features/passenger/screens/passenger_history_screen.dart';
 import 'package:tu_flota/features/passenger/screens/passenger_trip_detail_screen.dart';
 import 'package:tu_flota/features/driver/screens/driver_dashboard_screen.dart';
+import 'package:tu_flota/features/passenger/screens/chat_assistant_screen.dart'; 
+import 'package:tu_flota/features/passenger/screens/route_map_screen.dart'; 
+import 'package:latlong2/latlong.dart'; 
 
 // Unified router below
 
@@ -40,12 +43,13 @@ class _App extends ConsumerWidget {
       routes: {
         '/': (context) => const _AuthGate(),
         '/auth/login': (context) => const _LoginScreen(),
+        
+        // Company routes
         '/company/dashboard': (context) => const CompanyDashboardScreen(),
         '/company/profile': (context) => const CompanyProfileScreen(),
         '/company/profile/edit': (context) => const CompanyEditProfileScreen(),
         '/company/drivers': (context) => const CompanyDriversScreen(),
         '/company/driver/add': (context) => const CompanyAddDriverScreen(),
-        // Reuse add driver screen for editing when a Driver is passed in arguments.
         '/company/driver/edit': (context) => const CompanyAddDriverScreen(),
         '/company/schedules': (context) => const CompanySchedulesScreen(),
         '/company/trip/create': (context) => const CompanyCreateTripScreen(),
@@ -53,15 +57,31 @@ class _App extends ConsumerWidget {
           final args = ModalRoute.of(context)!.settings.arguments;
           return CompanyEditTripScreen(schedule: args);
         },
+        
         // Passenger routes
         '/passenger/dashboard': (context) => const PassengerSearchTripsScreen(),
         '/passenger/profile': (context) => const PassengerProfileScreen(),
         '/passenger/profile/edit': (context) => const PassengerEditProfileScreen(),
         '/passenger/history': (context) => const PassengerHistoryScreen(),
+        
+        // CORRECCIÓN CLAVE: Asegura la llamada al constructor del Widget.
         '/passenger/trip/detail': (context) {
           final args = ModalRoute.of(context)!.settings.arguments;
           return PassengerTripDetailScreen(schedule: args);
         },
+        
+        '/passenger/chat-assistant': (context) => const ChatAssistantScreen(), 
+
+        // RUTA CRÍTICA DEL MAPA: Define la pantalla RouteMapScreen
+        '/passenger/map/route': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, LatLng>;
+          
+          return RouteMapScreen(
+            origin: args['origin']!,
+            destination: args['destination']!,
+          );
+        },
+        
         // Driver route (placeholder)
         '/driver/dashboard': (context) => const DriverDashboardScreen(),
       },

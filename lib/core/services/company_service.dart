@@ -101,6 +101,9 @@ class CompanyService {
     if (map['company_id'] == null) {
       throw Exception('Missing company_id for driver creation');
     }
+    if (map['company_id'] == null) {
+      throw Exception('Missing company_id for driver creation');
+    }
     final inserted = await client
         .from('conductores')
         .insert(map)

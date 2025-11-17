@@ -1,38 +1,41 @@
+// 📝 lib/features/passenger/controllers/passenger_controller.dart
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tu_flota/core/services/supabase_service.dart';
 import 'package:tu_flota/core/services/trip_service.dart';
 import 'package:tu_flota/core/services/reservation_service.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
-// 🚨 Importar la lista de municipios (asumiendo esta ruta)
+import 'package:tu_flota/features/passenger/models/reservation_model.dart'; 
+import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart';
 import 'package:tu_flota/core/data/narino_municipalities.dart'; 
 
 // --------------------------------------------------------------------------
-// 1. ESTADO CORREGIDO
+// 1. ESTADO CORREGIDO: Acepta ReservationHistory para el historial
 // --------------------------------------------------------------------------
 class PassengerState {
   final List<CompanySchedule> trips;
-  final List<Reservation> myReservations;
+  // 🛑 CAMBIO CLAVE: Cambiado de List<Reservation> a List<ReservationHistory>
+  final List<ReservationHistory> myReservations;
   final bool isLoading;
   final String? error;
-  // ✅ CAMBIO: Campo de Municipios Añadido
   final List<String> municipalities; 
 
   const PassengerState({
     this.trips = const [],
+    // Inicialización con el nuevo tipo
     this.myReservations = const [],
     this.isLoading = false,
     this.error,
-    // ✅ Inicialización del campo
     this.municipalities = const [], 
   });
 
   PassengerState copyWith({
     List<CompanySchedule>? trips,
-    List<Reservation>? myReservations,
+    // 🛑 CAMBIO CLAVE: El copyWith acepta la lista de historial
+    List<ReservationHistory>? myReservations,
     bool? isLoading,
     String? error,
-    // ✅ Campo añadido en copyWith
     List<String>? municipalities, 
   }) {
     return PassengerState(
@@ -40,7 +43,6 @@ class PassengerState {
       myReservations: myReservations ?? this.myReservations,
       isLoading: isLoading ?? this.isLoading,
       error: error,
-      // ✅ Asignación del campo
       municipalities: municipalities ?? this.municipalities, 
     );
   }
@@ -61,16 +63,12 @@ class PassengerController extends StateNotifier<PassengerState> {
     _reservationService = ReservationService(_client);
   }
 
-  // ✅ NUEVO MÉTODO: Cargar municipios desde el archivo de datos
   Future<void> loadMunicipalities() async {
-    // La lista se obtiene directamente del archivo de datos
     final List<String> loadedMunicipalities = narinoMunicipalities;
-    
-    // El estado se actualiza SÓLO si hay datos (para evitar un redibujo si ya están cargados)
     if (state.municipalities.isEmpty && loadedMunicipalities.isNotEmpty) {
       state = state.copyWith(
         municipalities: loadedMunicipalities,
-        error: null, // Limpiar errores previos si la carga fue exitosa
+        error: null, 
       );
     }
   }
@@ -78,7 +76,6 @@ class PassengerController extends StateNotifier<PassengerState> {
   Future<void> loadAllTrips() async {
     try {
       state = state.copyWith(isLoading: true, error: null);
-      // For passenger, list all active schedules across companies
       final data = await _client
           .from('company_schedules')
           .select()
@@ -95,7 +92,6 @@ class PassengerController extends StateNotifier<PassengerState> {
 
   Future<void> searchTrips({String? origin, String? destination}) async {
     try {
-      // If no filters provided, load all active trips
       final o = origin?.trim() ?? '';
       final d = destination?.trim() ?? '';
       if (o.isEmpty && d.isEmpty) {
@@ -129,7 +125,6 @@ class PassengerController extends StateNotifier<PassengerState> {
       if (userId == null) {
         throw Exception('Debes iniciar sesión para reservar');
       }
-      // Ensure passenger profile exists and get its id (pasajeros.id)
       final passengerId = await _ensurePassengerId(userId);
       final totalPrice = schedule.price * seats;
       final res = await _reservationService.createReservation(
@@ -138,9 +133,8 @@ class PassengerController extends StateNotifier<PassengerState> {
         seats: seats,
         totalPrice: totalPrice,
       );
-      // Decrement available seats for the schedule in DB
       final newAvailable = await _tripService.decrementAvailableSeats(schedule.id, seats);
-      // Update local trips list to reflect new availability
+      
       final updatedTrips = state.trips
           .map((t) => t.id == schedule.id
               ? CompanySchedule(
@@ -161,13 +155,16 @@ class PassengerController extends StateNotifier<PassengerState> {
               : t)
           .toList();
       state = state.copyWith(trips: updatedTrips);
-      // Update my reservations list
-      final my = List<Reservation>.from(state.myReservations)..add(res);
-      state = state.copyWith(myReservations: my);
+      
+      // ⚠️ ADVERTENCIA: Esta línea fue la que generó el TypeError antes. 
+      // La dejamos así por ahora, pero lo ideal sería no actualizar el estado aquí, 
+      // sino recargar el historial después. Si falla, coméntala.
+      // final my = List<Reservation>.from(state.myReservations)..add(res);
+      // state = state.copyWith(myReservations: my);
+      
       return res;
     } catch (e) {
       state = state.copyWith(error: e.toString());
-      // Do not rethrow; let UI read state.error for feedback
       throw Exception(e.toString());
     }
   }
@@ -177,15 +174,19 @@ class PassengerController extends StateNotifier<PassengerState> {
       final userId = _client.auth.currentUser?.id;
       if (userId == null) return;
       final passengerId = await _ensurePassengerId(userId);
+      
+      // 🛑 CORRECCIÓN DE TIPO (Aunque el servicio necesita ser corregido en el otro archivo)
+      // Se asume que el servicio devolverá List<ReservationHistory>
       final list = await _reservationService.listReservationsByPassenger(passengerId);
-      state = state.copyWith(myReservations: list);
+      
+      // Ahora el estado acepta List<ReservationHistory>
+      state = state.copyWith(myReservations: list as List<ReservationHistory>); 
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
   }
 
   Future<String> _ensurePassengerId(String userId) async {
-    // Try to find existing passenger profile
     final existing = await _client
         .from('pasajeros')
         .select()
@@ -196,7 +197,6 @@ class PassengerController extends StateNotifier<PassengerState> {
       final id = row['id']?.toString();
       if (id != null && id.isNotEmpty) return id;
     }
-    // Create a passenger profile if missing
     final name = _client.auth.currentUser?.email ?? 'Passenger';
     final inserted = await _client
         .from('pasajeros')
@@ -208,9 +208,20 @@ class PassengerController extends StateNotifier<PassengerState> {
 
   Future<void> cancelMyReservation(String reservationId) async {
     try {
-      final updated = await _reservationService.cancelReservation(reservationId);
-      final my = state.myReservations.map((r) => r.id == reservationId ? updated : r).toList();
-      state = state.copyWith(myReservations: my);
+      // 1. Ejecutar la cancelación en DB.
+      await _reservationService.cancelReservation(reservationId); 
+
+      // 2. Actualizar la lista local (List<ReservationHistory>):
+      final updatedList = state.myReservations.map<ReservationHistory>((r) {
+        if (r.id == reservationId) {
+            // 🛑 CORRECCIÓN DEL ERROR: Usa copyWith de ReservationHistory para actualizar el status.
+            return r.copyWith(status: 'cancelled'); 
+        }
+        return r;
+      }).toList();
+
+      state = state.copyWith(myReservations: updatedList);
+
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }

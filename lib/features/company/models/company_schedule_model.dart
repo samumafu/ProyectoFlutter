@@ -1,3 +1,5 @@
+// 📝 lib/features/company/models/company_schedule_model.dart
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart'; // Necesario para DateTime
 
@@ -127,85 +129,5 @@ class CompanySchedule {
   }
 }
 
-class Reservation {
-  final String id;
-  final String tripId;
-  final String passengerId;
-  final int seatsReserved;
-  final double totalPrice;
-  final String status;
-
-  const Reservation({
-    required this.id,
-    required this.tripId,
-    required this.passengerId,
-    required this.seatsReserved,
-    required this.totalPrice,
-    required this.status,
-  });
-
-  factory Reservation.fromMap(Map<String, dynamic> map) {
-    return Reservation(
-      id: map['id'] as String,
-      tripId: map['trip_id'] as String,
-      passengerId: map['passenger_id'] as String,
-      seatsReserved: (map['seats_reserved'] as num).toInt(),
-      totalPrice: (map['total_price'] as num).toDouble(),
-      status: map['status'] as String,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'trip_id': tripId,
-      'passenger_id': passengerId,
-      'seats_reserved': seatsReserved,
-      'total_price': totalPrice,
-      'status': status,
-    };
-  }
-}
-
-// --------------------------------------------------------------------------
-// CLASE ChatMessage CORREGIDA
-// --------------------------------------------------------------------------
-class ChatMessage {
-  final String id;
-  final String tripId;
-  final String senderId;
-  final String message;
-  // -> PROPIEDAD AÑADIDA
-  final DateTime? createdAt; 
-
-  const ChatMessage({
-    required this.id,
-    required this.tripId,
-    required this.senderId,
-    required this.message,
-    this.createdAt, // -> AÑADIDA AL CONSTRUCTOR
-  });
-
-  factory ChatMessage.fromMap(Map<String, dynamic> map) {
-    return ChatMessage(
-      id: map['id'] as String,
-      tripId: map['trip_id'] as String,
-      senderId: map['sender_id'] as String,
-      message: map['message'] as String,
-      // -> LÓGICA AÑADIDA PARA PARSEAR EL TIMESTAMP
-      createdAt: map['created_at'] != null 
-          ? DateTime.parse(map['created_at'] as String) 
-          : null,
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'trip_id': tripId,
-      'sender_id': senderId,
-      'message': message,
-      'created_at': createdAt?.toIso8601String(),
-    };
-  }
-}
+// 🛑 IMPORTANTE: Las clases Reservation, ChatMessage y ReservationHistory han sido ELIMINADAS de este archivo.
+// Asegúrate de que todas las demás dependencias tengan las nuevas declaraciones 'import'.

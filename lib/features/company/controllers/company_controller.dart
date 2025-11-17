@@ -9,8 +9,9 @@ import 'package:tu_flota/core/services/trip_service.dart';
 import 'package:tu_flota/core/services/reservation_service.dart';
 import 'package:tu_flota/core/services/chat_service.dart';
 import 'package:tu_flota/core/services/supabase_service.dart';
+import 'package:tu_flota/features/passenger/models/reservation_model.dart';
+import 'package:tu_flota/features/company/models/chat_message_model.dart';
 
-// 🚨 CORRECCIONES DE IMPORTACIÓN:
 // 1. Importación del modelo Driver (que movimos a su propia carpeta)
 import 'package:tu_flota/features/driver/models/driver_model.dart'; 
 // 2. Importación de Company (que está en su ruta original)
@@ -185,6 +186,12 @@ class CompanyController extends StateNotifier<CompanyState> {
         return;
       }
       final drivers = await _companyService.listDriversByCompany(companyId);
+      final companyId = state.company?.id;
+      if (companyId == null) {
+        state = state.copyWith(drivers: const [], isLoading: false);
+        return;
+      }
+      final drivers = await _companyService.listDriversByCompany(companyId);
       state = state.copyWith(drivers: drivers, isLoading: false);
       _subscribeDriversRealtime();
     } catch (e) {
@@ -194,6 +201,24 @@ class CompanyController extends StateNotifier<CompanyState> {
 
   Future<void> createDriver(Driver driver) async {
     try {
+      final cid = state.company?.id;
+      if (cid == null) {
+        throw Exception('Company is not selected');
+      }
+      final created = await _companyService.createDriver(
+        Driver(
+          id: driver.id,
+          userId: driver.userId,
+          name: driver.name,
+          available: driver.available,
+          phone: driver.phone,
+          autoModel: driver.autoModel,
+          autoColor: driver.autoColor,
+          autoPlate: driver.autoPlate,
+          rating: driver.rating,
+          companyId: cid,
+        ),
+      );
       final cid = state.company?.id;
       if (cid == null) {
         throw Exception('Company is not selected');
@@ -394,8 +419,20 @@ class CompanyController extends StateNotifier<CompanyState> {
           final updated = [...state.drivers, d];
           state = state.copyWith(drivers: updated);
         }
+        final companyId = state.company?.id;
+        if (companyId != null && d.companyId == companyId) {
+          final updated = [...state.drivers, d];
+          state = state.copyWith(drivers: updated);
+        }
       },
       onUpdate: (d) {
+        final companyId = state.company?.id;
+        if (companyId != null && d.companyId == companyId) {
+          final updated = state.drivers
+              .map((e) => e.id == d.id ? d : e)
+              .toList();
+          state = state.copyWith(drivers: updated);
+        }
         final companyId = state.company?.id;
         if (companyId != null && d.companyId == companyId) {
           final updated = state.drivers
@@ -487,6 +524,7 @@ class CompanyController extends StateNotifier<CompanyState> {
     final driversCount = (driversRes as List).length;
 
     return {
+      'drivers': driversCount,
       'drivers': driversCount,
       'schedules': scheduleIds.length,
       'reservations': (reservationsRes as List).length,
