@@ -85,6 +85,16 @@ class CompanyService {
         .toList();
   }
 
+  Future<Driver?> getDriverByUserId(String userId) async {
+    final data = await client
+        .from('conductores')
+        .select()
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (data == null) return null;
+    return Driver.fromMap(data);
+  }
+
   Future<Driver> createDriver(Driver driver) async {
     final map = driver.toMap();
     map.remove('id');

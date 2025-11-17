@@ -15,6 +15,8 @@ class CompanySchedule {
   final String? vehicleId;
   final bool isActive;
   final Map<String, dynamic>? additionalInfo;
+  final String? assignedDriverId;
+  final String? assignmentStatus; // pending | accepted | rejected
 
   const CompanySchedule({
     required this.id,
@@ -30,6 +32,8 @@ class CompanySchedule {
     this.vehicleType,
     this.vehicleId,
     this.additionalInfo,
+    this.assignedDriverId,
+    this.assignmentStatus,
   });
 
   factory CompanySchedule.fromMap(Map<String, dynamic> map) {
@@ -97,6 +101,8 @@ class CompanySchedule {
       vehicleId: _asString(map['vehicle_id']),
       isActive: _asBool(map['is_active']),
       additionalInfo: _asJsonMap(map['additional_info']),
+      assignedDriverId: _asString(map['assigned_driver_id']),
+      assignmentStatus: _asString(map['assignment_status']),
     );
   }
 
@@ -115,6 +121,8 @@ class CompanySchedule {
       'vehicle_id': vehicleId,
       'is_active': isActive,
       'additional_info': additionalInfo,
+      'assigned_driver_id': assignedDriverId,
+      'assignment_status': assignmentStatus,
     };
   }
 }

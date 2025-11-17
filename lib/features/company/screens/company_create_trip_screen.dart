@@ -34,6 +34,7 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
   final _vehicleId = TextEditingController();
   final _additionalInfo = TextEditingController();
   bool _isActive = true;
+  String? _assignedDriverId;
 
   DateTime? _departureDateTime;
   DateTime? _arrivalDateTime;
@@ -48,6 +49,17 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
     _vehicleId.dispose();
     _additionalInfo.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      final company = ref.read(companyControllerProvider).company;
+      if (company != null && ref.read(companyControllerProvider).drivers.isEmpty) {
+        await ref.read(companyControllerProvider.notifier).loadDrivers();
+      }
+    });
   }
 
   Future<void> _save() async {
@@ -76,6 +88,8 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
       additionalInfo: _additionalInfo.text.trim().isEmpty
           ? null
           : _parseJsonOrNull(_additionalInfo.text.trim()),
+      assignedDriverId: _assignedDriverId,
+      assignmentStatus: _assignedDriverId == null ? null : 'pending',
     );
     try {
       await ref.read(companyControllerProvider.notifier).createSchedule(schedule);
@@ -368,7 +382,24 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
                                   ],
                                 ),
                           
-                          const SizedBox(height: 24),
+                      const SizedBox(height: 24),
+                      const Text('Assignment', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
+                      const Divider(height: 20, thickness: 1),
+                      DropdownButtonFormField<String>(
+                        decoration: deco(AppStrings.assignDriver).copyWith(
+                          prefixIcon: const Icon(Icons.person_outline, color: _primaryColor),
+                        ),
+                        value: _assignedDriverId,
+                        items: ref.watch(companyControllerProvider).drivers.map((d) => DropdownMenuItem(
+                              value: d.id,
+                              child: Text(d.name),
+                            ))
+                            .toList(),
+                        onChanged: (v) => setState(() => _assignedDriverId = v),
+                        isExpanded: true,
+                        menuMaxHeight: 300,
+                      ),
+                      const SizedBox(height: 24),
                           const Text('Schedule & Pricing', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
                           const Divider(height: 20, thickness: 1),
                           // --- TIME FIELDS ---

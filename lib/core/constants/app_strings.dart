@@ -114,4 +114,12 @@ class AppStrings {
   static const passengerDashboard = 'Passenger Dashboard';
   static const tripDetail = 'Trip Detail';
   static const driverDashboard = 'Driver Dashboard';
+  static const assignedTrips = 'Assigned Trips';
+  static const accept = 'Accept';
+  static const reject = 'Reject';
+  static const pending = 'Pending';
+  static const accepted = 'Accepted';
+  static const rejected = 'Rejected';
+  static const assignDriver = 'Assign Driver';
+  static const assignmentStatus = 'Assignment Status';
 }

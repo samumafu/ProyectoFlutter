@@ -20,6 +20,17 @@ class TripService {
         .toList();
   }
 
+  Future<List<CompanySchedule>> listAssignedSchedulesForDriver(String driverId) async {
+    final data = await client
+        .from('company_schedules')
+        .select()
+        .eq('assigned_driver_id', driverId)
+        .order('departure_time');
+    return (data as List<dynamic>)
+        .map((e) => CompanySchedule.fromMap(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<CompanySchedule?> getScheduleById(String id) async {
     final data = await client
         .from('company_schedules')
@@ -51,6 +62,20 @@ class TripService {
       throw Exception('Update schedule failed');
     }
     return CompanySchedule.fromMap(updated);
+  }
+
+  Future<void> assignScheduleToDriver({required String scheduleId, required String driverId}) async {
+    await client
+        .from('company_schedules')
+        .update({'assigned_driver_id': driverId, 'assignment_status': 'pending'})
+        .eq('id', scheduleId);
+  }
+
+  Future<void> updateAssignmentStatus({required String scheduleId, required String status}) async {
+    await client
+        .from('company_schedules')
+        .update({'assignment_status': status})
+        .eq('id', scheduleId);
   }
 
   Future<void> deleteSchedule(String id) async {

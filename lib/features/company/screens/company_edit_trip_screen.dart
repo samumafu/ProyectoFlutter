@@ -28,6 +28,7 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
   late final TextEditingController _vehicleId;
   late final TextEditingController _additionalInfo;
   bool _isActive = true;
+  String? _assignedDriverId;
 
   // Colores para el diseño
   static const Color _primaryColor = Color(0xFF1E88E5);
@@ -48,6 +49,13 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
     _vehicleId = TextEditingController(text: _s.vehicleId ?? '');
     _additionalInfo = TextEditingController(text: jsonEncode(_s.additionalInfo ?? {}));
     _isActive = _s.isActive;
+    _assignedDriverId = _s.assignedDriverId;
+    Future.microtask(() async {
+      final company = ref.read(companyControllerProvider).company;
+      if (company != null && ref.read(companyControllerProvider).drivers.isEmpty) {
+        await ref.read(companyControllerProvider.notifier).loadDrivers();
+      }
+    });
   }
 
   @override
@@ -82,6 +90,8 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
       vehicleId: _vehicleId.text.trim().isEmpty ? null : _vehicleId.text.trim(),
       isActive: _isActive,
       additionalInfo: _parseJsonOrKeep(_s.additionalInfo, _additionalInfo.text.trim()),
+      assignedDriverId: _assignedDriverId,
+      assignmentStatus: _assignedDriverId != _s.assignedDriverId ? 'pending' : _s.assignmentStatus,
     );
     try {
       await ref.read(companyControllerProvider.notifier).updateSchedule(updated);
@@ -335,6 +345,18 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
                             title: 'Configuración', // FIX: Usar String literal
                             icon: Icons.tune,
                             fields: [
+                              DropdownButtonFormField<String>(
+                                decoration: _inputDeco(AppStrings.assignDriver, Icons.person_outline),
+                                value: _assignedDriverId,
+                                items: ref.watch(companyControllerProvider).drivers.map((d) => DropdownMenuItem(
+                                      value: d.id,
+                                      child: Text(d.name),
+                                    )).toList(),
+                                onChanged: (v) => setState(() => _assignedDriverId = v),
+                                isExpanded: true,
+                                menuMaxHeight: 300,
+                              ),
+                              const SizedBox(height: 16),
                               TextFormField(
                                 controller: _additionalInfo,
                                 decoration: _inputDeco(AppStrings.additionalInfo, Icons.info_outline)
