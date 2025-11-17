@@ -122,4 +122,8 @@ class AppStrings {
   static const rejected = 'Rejected';
   static const assignDriver = 'Assign Driver';
   static const assignmentStatus = 'Assignment Status';
+  static const startTrip = 'Start Trip';
+  static const finishTrip = 'Finish Trip';
+  static const inProgress = 'In Progress';
+  static const finished = 'Finished';
 }

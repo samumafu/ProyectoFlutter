@@ -78,6 +78,22 @@ class TripService {
         .eq('id', scheduleId);
   }
 
+  Future<void> startTrip({required String scheduleId}) async {
+    final now = DateTime.now().toIso8601String();
+    await client
+        .from('company_schedules')
+        .update({'driver_trip_status': 'in_progress', 'driver_started_at': now})
+        .eq('id', scheduleId);
+  }
+
+  Future<void> finishTrip({required String scheduleId}) async {
+    final now = DateTime.now().toIso8601String();
+    await client
+        .from('company_schedules')
+        .update({'driver_trip_status': 'finished', 'driver_finished_at': now})
+        .eq('id', scheduleId);
+  }
+
   Future<void> deleteSchedule(String id) async {
     await client.from('company_schedules').delete().eq('id', id);
   }
