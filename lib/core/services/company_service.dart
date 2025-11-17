@@ -5,7 +5,7 @@ import 'package:tu_flota/features/driver/models/driver_model.dart';
 
 typedef OnDriverInsert = void Function(Driver driver);
 typedef OnDriverUpdate = void Function(Driver driver);
-typedef OnDriverDelete = void Function(int id);
+typedef OnDriverDelete = void Function(String id);
 
 class CompanyService {
   final SupabaseClient client;
@@ -22,13 +22,23 @@ class CompanyService {
   }
 
   Future<Company?> fetchCompanyByEmail(String email) async {
-    final data = await client
+    // Primary association by email column
+    final byEmail = await client
         .from('companies')
         .select()
         .ilike('email', email)
         .maybeSingle();
-    if (data == null) return null;
-    return Company.fromMap(data);
+    if (byEmail != null) return Company.fromMap(byEmail);
+
+    // Fallback: some datasets store the email in the name field
+    final byName = await client
+        .from('companies')
+        .select()
+        .ilike('name', email)
+        .maybeSingle();
+    if (byName != null) return Company.fromMap(byName);
+
+    return null;
   }
 
   Future<List<Company>> listCompanies() async {
@@ -68,17 +78,35 @@ class CompanyService {
   }
 
   // Conductores (Drivers)
-  Future<List<Driver>> listDrivers() async {
-    final data = await client.from('conductores').select();
+  Future<List<Driver>> listDriversByCompany(String companyId) async {
+    final data = await client.from('conductores').select().eq('company_id', companyId);
     return (data as List<dynamic>)
         .map((e) => Driver.fromMap(e as Map<String, dynamic>))
         .toList();
   }
 
+  Future<Driver?> getDriverByUserId(String userId) async {
+    final data = await client
+        .from('conductores')
+        .select()
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (data == null) return null;
+    return Driver.fromMap(data);
+  }
+
   Future<Driver> createDriver(Driver driver) async {
+    final map = driver.toMap();
+    map.remove('id');
+    if (map['company_id'] == null) {
+      throw Exception('Missing company_id for driver creation');
+    }
+    if (map['company_id'] == null) {
+      throw Exception('Missing company_id for driver creation');
+    }
     final inserted = await client
         .from('conductores')
-        .insert(driver.toMap())
+        .insert(map)
         .select()
         .maybeSingle();
     return Driver.fromMap(inserted!);
@@ -97,11 +125,11 @@ class CompanyService {
     return Driver.fromMap(updated);
   }
 
-  Future<void> deleteDriver(int id) async {
+  Future<void> deleteDriver(String id) async {
     await client.from('conductores').delete().eq('id', id);
   }
 
-  Future<Driver> toggleDriverAvailability(int id, bool available) async {
+  Future<Driver> toggleDriverAvailability(String id, bool available) async {
     final updated = await client
         .from('conductores')
         .update({'available': available})
@@ -142,7 +170,7 @@ class CompanyService {
         table: 'conductores',
         callback: (payload) {
           final oldRow = payload.oldRecord;
-          if (oldRow != null) onDelete(oldRow['id'] as int);
+          if (oldRow != null) onDelete(oldRow['id'].toString());
         },
       );
     channel.subscribe();

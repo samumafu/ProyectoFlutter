@@ -1,7 +1,7 @@
 // lib/features/driver/models/driver_model.dart
 
 class Driver {
-  final int id;
+  final String id;
   final String userId;
   final String name;
   final String? phone;
@@ -10,6 +10,7 @@ class Driver {
   final String? autoPlate;
   final bool available;
   final double? rating;
+  final String? companyId;
 
   const Driver({
     required this.id,
@@ -21,20 +22,22 @@ class Driver {
     this.autoColor,
     this.autoPlate,
     this.rating,
+    this.companyId,
   });
 
   // 🚨 MÉTODO FALTANTE: FACTORY CONSTRUCTOR FROMMAP
   factory Driver.fromMap(Map<String, dynamic> map) {
     return Driver(
-      id: (map['id'] as num).toInt(),
-      userId: map['user_id'] as String,
+      id: map['id']?.toString() ?? '',
+      userId: map['user_id']?.toString() ?? '',
       name: map['name'] as String,
       phone: map['phone'] as String?,
       autoModel: map['auto_model'] as String?,
       autoColor: map['auto_color'] as String?,
       autoPlate: map['auto_plate'] as String?,
-      available: (map['available'] as bool?) ?? false,
+      available: (map['available'] as bool?) ?? true,
       rating: (map['rating'] as num?)?.toDouble(),
+      companyId: map['company_id']?.toString(),
     );
   }
 
@@ -50,6 +53,7 @@ class Driver {
       'auto_plate': autoPlate,
       'available': available,
       'rating': rating,
+      'company_id': companyId,
     };
   }
 }

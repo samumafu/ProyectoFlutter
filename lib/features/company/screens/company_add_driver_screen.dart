@@ -81,7 +81,7 @@ class _CompanyAddDriverScreenState extends ConsumerState<CompanyAddDriverScreen>
 
   String? _req(String? v) => (v == null || v.trim().isEmpty) ? AppStrings.required : null;
 
-  String? _reqModel(String? v) => (v == null || v.isEmpty) ? 'Debe seleccionar un modelo de vehículo.' : null;
+  String? _reqModel(String? v) => (v == null || v.isEmpty) ? AppStrings.vehicleModelRequired : null;
 
 
   Future<void> _save() async {
@@ -106,7 +106,7 @@ class _CompanyAddDriverScreenState extends ConsumerState<CompanyAddDriverScreen>
 
     try {
       final Driver driver = Driver(
-        id: _editing?.id ?? 0,
+        id: _editing?.id ?? '',
         userId: _editing?.userId ?? linkedUserId!,
         name: _name.text.trim(),
         phone: _phone.text.trim().isEmpty ? null : _phone.text.trim(),
@@ -115,6 +115,7 @@ class _CompanyAddDriverScreenState extends ConsumerState<CompanyAddDriverScreen>
         autoPlate: _autoPlate.text.trim().isEmpty ? null : _autoPlate.text.trim(),
         available: _available,
         rating: _editing?.rating,
+        companyId: ref.read(companyControllerProvider).company?.id,
       );
 
       if (_editing == null) {

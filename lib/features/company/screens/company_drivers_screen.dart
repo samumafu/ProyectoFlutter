@@ -16,8 +16,12 @@ class _CompanyDriversScreenState extends ConsumerState<CompanyDriversScreen> {
   void initState() {
     super.initState();
     Future.microtask(() async {
-      await ref.read(companyControllerProvider.notifier).loadAuthAndCompany();
-      await ref.read(companyControllerProvider.notifier).loadDrivers();
+      final notifier = ref.read(companyControllerProvider.notifier);
+      final current = ref.read(companyControllerProvider);
+      if (current.user == null || current.company == null) {
+        await notifier.loadAuthAndCompany();
+      }
+      await notifier.loadDrivers();
     });
   }
 

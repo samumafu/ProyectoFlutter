@@ -60,6 +60,7 @@ class AppStrings {
   static const plate = 'Plate';
   static const available = 'Available';
   static const rating = 'Rating';
+  static const vehicleModelRequired = 'Vehicle model is required';
   static const driverCreated = 'Driver created';
   static const driverUpdated = 'Driver updated';
   static const driverDeleted = 'Driver deleted';
@@ -96,6 +97,9 @@ class AppStrings {
   static const passenger = 'Passenger';
   static const status = 'Status';
   static const total = 'Total';
+  static const selectYourCompany = 'Select your Company';
+  static const noActiveTripsFound = 'No active trips found.';
+  static const tapPlusToCreate = 'Tap the "+" button to create a new schedule.';
 
   // Chat
   static const chat = 'Chat';
@@ -110,4 +114,16 @@ class AppStrings {
   static const passengerDashboard = 'Passenger Dashboard';
   static const tripDetail = 'Trip Detail';
   static const driverDashboard = 'Driver Dashboard';
+  static const assignedTrips = 'Assigned Trips';
+  static const accept = 'Accept';
+  static const reject = 'Reject';
+  static const pending = 'Pending';
+  static const accepted = 'Accepted';
+  static const rejected = 'Rejected';
+  static const assignDriver = 'Assign Driver';
+  static const assignmentStatus = 'Assignment Status';
+  static const startTrip = 'Start Trip';
+  static const finishTrip = 'Finish Trip';
+  static const inProgress = 'In Progress';
+  static const finished = 'Finished';
 }

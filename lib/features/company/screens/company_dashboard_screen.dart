@@ -66,8 +66,9 @@ class CompanyDashboardScreen extends ConsumerWidget {
             tooltip: AppStrings.signOut,
             onPressed: () async {
               await SupabaseService().signOut();
+              ref.read(companyControllerProvider.notifier).reset();
               if (context.mounted) {
-                Navigator.pushReplacementNamed(context, '/auth/login');
+                Navigator.pushNamedAndRemoveUntil(context, '/auth/login', (route) => false);
               }
             },
           ),

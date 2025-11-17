@@ -1,16 +1,23 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
-import 'package:tu_flota/features/passenger/models/reservation_model.dart';
-import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart';
+import 'package:tu_flota/features/passenger/models/reservation_model.dart'; 
+import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart'; // NECESARIO
 
-typedef OnReservationInsert = void Function(Reservation res);
-typedef OnReservationUpdate = void Function(Reservation res);
+// ---------------------------------------------------
+// 1. DEFINICIONES DE TIPO (Typedefs) - Faltaban/Duplicadas
+// ---------------------------------------------------
+typedef OnReservationInsert = void Function(Reservation reservation);
+typedef OnReservationUpdate = void Function(Reservation reservation);
 typedef OnReservationDelete = void Function(String id);
+
 
 class ReservationService {
   final SupabaseClient client;
   ReservationService(this.client);
 
+  // ---------------------------------------------------
+  // 2. Listar reservas por itinerario
+  // ---------------------------------------------------
   Future<List<Reservation>> listReservationsForSchedule(String scheduleId) async {
     final data = await client
         .from('reservations')
@@ -23,7 +30,7 @@ class ReservationService {
   }
 
   // ---------------------------------------------------
-  // 🔹 Obtener emails por IDs de pasajeros
+  // 3. Obtener emails por IDs de pasajeros (corregido)
   // ---------------------------------------------------
   Future<Map<String, String>> getPassengerEmailsByIds(List<String> passengerIds) async {
     if (passengerIds.isEmpty) return {};
@@ -75,7 +82,7 @@ class ReservationService {
   }
 
   // ---------------------------------------------------
-  // 🔹 Suscripción realtime a reservas de un viaje
+  // 4. Suscripción realtime a reservas de un viaje (corregido)
   // ---------------------------------------------------
   RealtimeChannel subscribeReservationsForTrip({
     required String tripId,
@@ -123,7 +130,7 @@ class ReservationService {
   }
 
   // ---------------------------------------------------
-  // 🔹 Historial por pasajero (con orden por created_at)
+  // 5. Historial por pasajero (ordenado por created_at)
   // ---------------------------------------------------
   Future<List<ReservationHistory>> listReservationsByPassenger(String passengerId) async {
     final data = await client
@@ -147,7 +154,7 @@ class ReservationService {
   }
 
   // ---------------------------------------------------
-  // 🔹 Crear reserva
+  // 6. Crear reserva
   // ---------------------------------------------------
   Future<Reservation> createReservation({
     required String tripId,
@@ -171,7 +178,7 @@ class ReservationService {
   }
 
   // ---------------------------------------------------
-  // 🔹 Cancelar reserva
+  // 7. Cancelar reserva
   // ---------------------------------------------------
   Future<Reservation> cancelReservation(String reservationId) async {
     final updated = await client
@@ -185,7 +192,7 @@ class ReservationService {
   }
 
   // ---------------------------------------------------
-  // 🔹 Marcar como abordado
+  // 8. Marcar como abordado (corregido, solo una versión)
   // ---------------------------------------------------
   Future<Reservation> updateBoarded(String reservationId, bool boarded) async {
     final updated = await client

@@ -12,6 +12,8 @@ class Reservation {
   // 🟢 Campos de Recogida guardados en la tabla 'reservations'
   final double? pickupLatitude; 
   final double? pickupLongitude;
+  final bool? boarded;
+  final String? boardedAt;
 
   const Reservation({
     required this.id,
@@ -22,6 +24,8 @@ class Reservation {
     required this.status,
     this.pickupLatitude,
     this.pickupLongitude,
+    this.boarded,
+    this.boardedAt,
   });
 
   factory Reservation.fromMap(Map<String, dynamic> map) {
@@ -41,6 +45,8 @@ class Reservation {
       // Mapeo de los nuevos campos de recogida
       pickupLatitude: _asDoubleNullable(map['pickup_latitude']),
       pickupLongitude: _asDoubleNullable(map['pickup_longitude']),
+      boarded: map['boarded'] as bool?,
+      boardedAt: map['boarded_at']?.toString(),
     );
   }
 
@@ -54,6 +60,8 @@ class Reservation {
       'status': status,
       'pickup_latitude': pickupLatitude,
       'pickup_longitude': pickupLongitude,
+      'boarded': boarded,
+      'boarded_at': boardedAt,
     };
   }
 }
