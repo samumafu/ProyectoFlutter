@@ -25,7 +25,7 @@ class ReservationService {
 
   Future<Map<String, String>> getPassengerEmailsByIds(List<String> passengerIds) async {
     if (passengerIds.isEmpty) return {};
-    final idsList = passengerIds.map((e) => "'$e'").join(',');
+    final idsList = passengerIds.join(',');
     final pasajeros = await client
         .from('pasajeros')
         .select('id,user_id')
@@ -36,8 +36,9 @@ class ReservationService {
         }).toList();
     final userIds = pList.map((e) => e['user_id']).where((e) => e != null).cast<String>().toSet().toList();
     if (userIds.isEmpty) return {};
-    final uIdsList = userIds.map((e) => "'$e'").join(',');
+    final uIdsList = userIds.join(',');
     final users = await client
+        .schema('auth')
         .from('users')
         .select('id,email')
         .filter('id', 'in', '($uIdsList)');

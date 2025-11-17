@@ -25,6 +25,10 @@ class DriverDashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
+  static const Color _despegarPrimaryBlue = Color(0xFF0073E6);
+  static const Color _despegarLightBlue = Color(0xFFE6F3FF);
+  static const Color _despegarDarkText = Color(0xFF333333);
+  static const Color _despegarGreyText = Color(0xFF666666);
   Driver? _driver;
   bool _loading = true;
   List<CompanySchedule> _assigned = const [];
@@ -316,6 +320,11 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Card(
+                        elevation: 2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: const BorderSide(color: _despegarLightBlue, width: 1.5),
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
@@ -323,12 +332,12 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                             children: [
                               Text(
                                 _driver!.name,
-                                style: theme.textTheme.titleMedium,
+                                style: theme.textTheme.titleMedium?.copyWith(color: _despegarDarkText, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  const Icon(Icons.directions_car),
+                                  const Icon(Icons.directions_car, color: _despegarPrimaryBlue),
                                   const SizedBox(width: 8),
                                   Text(_driver!.autoModel ?? AppStrings.vehicleModel),
                                 ],
@@ -336,7 +345,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  const Icon(Icons.color_lens),
+                                  const Icon(Icons.color_lens, color: _despegarPrimaryBlue),
                                   const SizedBox(width: 8),
                                   Text(_driver!.autoColor ?? AppStrings.vehicleColor),
                                 ],
@@ -344,7 +353,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  const Icon(Icons.confirmation_number),
+                                  const Icon(Icons.confirmation_number, color: _despegarPrimaryBlue),
                                   const SizedBox(width: 8),
                                   Text(_driver!.autoPlate ?? AppStrings.plate),
                                 ],
@@ -378,9 +387,9 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                               const SizedBox(height: 8),
                               Row(
                                 children: [
-                                  ElevatedButton.icon(
+                                  OutlinedButton.icon(
                                     onPressed: () => _openEditProfile(),
-                                    icon: const Icon(Icons.edit),
+                                    icon: const Icon(Icons.edit, color: _despegarPrimaryBlue),
                                     label: const Text(AppStrings.editProfile),
                                   ),
                                 ],
@@ -390,7 +399,34 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Text(AppStrings.assignedTrips, style: theme.textTheme.titleMedium),
+                      Card(
+                        elevation: 3,
+                        margin: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _despegarLightBlue, width: 2),
+                          ),
+                          child: Row(
+                            children: const [
+                              Icon(Icons.departure_board_outlined, color: _despegarPrimaryBlue, size: 24),
+                              SizedBox(width: 10),
+                              Text(
+                                'Assigned Trips',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: _despegarPrimaryBlue,
+                                ),
+                              ),
+                              Spacer(),
+                              Icon(Icons.filter_list, color: _despegarGreyText),
+                            ],
+                          ),
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -417,27 +453,43 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                                                   ? AppStrings.rejected
                                                   : AppStrings.pending;
                                   return Card(
+                                    elevation: 2,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      side: const BorderSide(color: _despegarLightBlue, width: 1.5),
+                                    ),
                                     child: Padding(
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text('${s.origin} → ${s.destination}', style: theme.textTheme.bodyLarge),
+                                          Row(
+                                            children: [
+                                              const Icon(Icons.route, color: _despegarPrimaryBlue, size: 20),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '${s.origin} → ${s.destination}',
+                                                  style: theme.textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600, color: _despegarDarkText),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
                                           const SizedBox(height: 4),
                                           Text('Dep: ${s.departureTime} | Arr: ${s.arrivalTime}'),
                                           const SizedBox(height: 4),
                                           Text('${AppStrings.availableSeats}: ${s.availableSeats} / ${s.totalSeats}'),
                                           const SizedBox(height: 8),
-                                          Row(
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
                                             children: [
-                                              Chip(label: Text(statusLabel)),
-                                              const Spacer(),
+                                              Chip(label: Text(statusLabel), backgroundColor: _despegarLightBlue),
                                               if (s.assignmentStatus == 'pending') ...[
                                                 TextButton(
                                                   onPressed: _updating ? null : () => _updateStatus(s.id, 'accepted'),
                                                   child: const Text(AppStrings.accept),
                                                 ),
-                                                const SizedBox(width: 8),
                                                 TextButton(
                                                   onPressed: _updating ? null : () => _updateStatus(s.id, 'rejected'),
                                                   child: const Text(AppStrings.reject),
@@ -456,14 +508,23 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                                               OutlinedButton.icon(
                                                 onPressed: () => _openRoute(s),
                                                 icon: const Icon(Icons.map_outlined),
-                                                label: const Text('View Route'),
+                                                label: const Text('Route'),
                                               ),
-                                              const SizedBox(width: 8),
                                               OutlinedButton.icon(
                                                 onPressed: () => _openChat(s.id),
                                                 icon: const Icon(Icons.chat_bubble_outline),
                                                 label: const Text(AppStrings.chat),
                                               ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 12,
+                                            runSpacing: 6,
+                                            children: [
+                                              Text('Occupancy: ${(s.totalSeats - s.availableSeats)}/${s.totalSeats}'),
+                                              if (_resBySchedule[s.id] != null)
+                                                Text('Boarded: ${_resBySchedule[s.id]!.where((r) => r.boarded == true).fold<int>(0, (p, r) => p + r.seatsReserved)}'),
                                             ],
                                           ),
                                           const SizedBox(height: 8),
@@ -478,25 +539,16 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
                                             const SizedBox(height: 4),
                                             Text('${AppStrings.passenger}: ${_resBySchedule[s.id]!.length}'),
                                             const SizedBox(height: 6),
-                                           ..._resBySchedule[s.id]!.map((r) => Padding(
-                                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                                  child: Row(
-                                                    children: [
-                                                      const Icon(Icons.person_outline, size: 18),
-                                                      const SizedBox(width: 6),
-                                                      Expanded(child: Text(_passengerEmailById[r.passengerId] ?? r.passengerId)),
-                                                      Text('${AppStrings.seats}: ${r.seatsReserved}'),
-                                                      const SizedBox(width: 8),
-                                                      Text(r.status),
-                                                      const SizedBox(width: 8),
-                                                      if (r.pickupLatitude != null && r.pickupLongitude != null)
-                                                        Text('(${r.pickupLatitude}, ${r.pickupLongitude})'),
-                                                      const SizedBox(width: 8),
-                                                      TextButton(
-                                                        onPressed: () => _toggleBoarded(r),
-                                                        child: Text(r.boarded == true ? 'Set Not Boarded' : 'Set Boarded'),
-                                                      ),
-                                                    ],
+                                            ..._resBySchedule[s.id]!.map((r) => ListTile(
+                                                  leading: CircleAvatar(
+                                                    backgroundColor: _despegarPrimaryBlue.withOpacity(0.1),
+                                                    child: const Icon(Icons.person, color: _despegarPrimaryBlue, size: 20),
+                                                  ),
+                                                  title: Text(_passengerEmailById[r.passengerId] ?? r.passengerId),
+                                                  subtitle: Text('${AppStrings.seats}: ${r.seatsReserved} | ${AppStrings.status}: ${r.status}' + ((r.pickupLatitude != null && r.pickupLongitude != null) ? ' | (${r.pickupLatitude}, ${r.pickupLongitude})' : '')),
+                                                  trailing: TextButton(
+                                                    onPressed: () => _toggleBoarded(r),
+                                                    child: Text(r.boarded == true ? 'Set Not Boarded' : 'Set Boarded'),
                                                   ),
                                                 )),
                                           ],
