@@ -16,24 +16,31 @@ dependencies:
   flutter:
     sdk: flutter
   
-  # ✅ CORRECCIÓN FINAL: Usando la versión ^0.4.7, que resuelve el conflicto de dependencias.
+  # Asistente IA (Generative AI)
   google_generative_ai: ^0.4.7 
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+  # Backend y Estado
   supabase_flutter: ^2.4.8
   flutter_riverpod: ^2.5.1
+  
+  # 🗺️ DEPENDENCIAS AÑADIDAS PARA OPENSTREETMAP y RUTAS OSRM
+  # 1. Mapa Base (Muestra OSM)
+  flutter_map: ^6.1.0 
+  # 2. Manejo de Coordenadas (LatLng)
+  latlong2: ^0.9.1 
+  # 3. HTTP para llamar a la API de rutas OSRM
+  http: ^1.1.0 
+  # 4. Decodificador de Polilíneas (Para dibujar la ruta en el mapa)
+  flutter_polyline_points: ^2.0.0 
+
+
+  # Otros
+  cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints to
-  # encourage good coding practices. The lint set provided by the package is
-  # activated in the `analysis_options.yaml` file located at the root of your
-  # package. See that file for information about deactivating specific lint
-  # rules and activating additional ones.
   flutter_lints: ^5.0.0
 
 # ... (rest of flutter section)

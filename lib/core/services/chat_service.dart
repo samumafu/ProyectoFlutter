@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
+import 'package:tu_flota/features/company/models/chat_message_model.dart';
 
 typedef OnMessage = void Function(ChatMessage msg);
 

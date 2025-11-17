@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tu_flota/features/passenger/controllers/passenger_controller.dart';
-// Asegúrate de importar tu modelo de Reservation si no está implícito
-// import 'package:tu_flota/features/company/models/reservation_model.dart'; 
+// IMPORTACIÓN NECESARIA para LatLng
+import 'package:latlong2/latlong.dart'; 
+// IMPORTACIÓN DEL DTO (Asumimos que está en este path)
+import 'package:tu_flota/features/company/models/company_schedule_model.dart'; 
+import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart';
 
-// Definiciones de estilo (Alineadas con el resto de la app - estilo Despegar)
-// Usamos tus colores originales pero con nombres más descriptivos para la estética
-const Color _primaryColor = Color(0xFF0073E6); // Usando un azul más Despegar/Moderno (reemplazando 0xFF1E88E5)
+// Definiciones de estilo (Alineadas con el resto de la app - estilo Despegar/Moderno)
+const Color _primaryColor = Color(0xFF0073E6); // Azul Moderno
 const Color _accentColor = Color(0xFF34A853); // Verde (Confirmado)
 const Color _reservedColor = Color(0xFFC62828); // Rojo (Cancelado)
 const Color _pendingColor = Color(0xFFFFB300); // Naranja (Pendiente)
-const Color _backgroundColor = Color(0xFFF8F9FA); // Fondo casi blanco
-const Color _darkTextColor = Color(0xFF333333); // Texto oscuro
+const Color _backgroundColor = Color(0xFFF0F2F5); // Fondo más grisáceo/suave
+const Color _darkTextColor = Color(0xFF1A1A1A); // Texto muy oscuro
 
 const double _maxContentWidth = 900.0; // Ancho máximo para el centrado
 
@@ -43,7 +45,7 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
     }
   }
 
-  // ⚠️ Lógica de cancelación
+  // Lógica de cancelación
   Future<void> _confirmCancelation(dynamic reservationId) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -58,7 +60,6 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
     );
 
     if (confirm == true) {
-      // Usamos .toString() para asegurar el tipo si 'r.id' no es String
       await ref.read(passengerControllerProvider.notifier).cancelMyReservation(reservationId.toString());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -71,12 +72,13 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(passengerControllerProvider);
-    final reservations = state.myReservations;
+    // USO DEL DTO CORREGIDO
+    final List<ReservationHistory> reservations = state.myReservations.cast<ReservationHistory>();
 
     return Scaffold(
       backgroundColor: _backgroundColor,
       appBar: AppBar(
-        title: const Text('Historial de Reservas'),
+        title: const Text('Historial de Viajes'),
         backgroundColor: _primaryColor,
         foregroundColor: Colors.white,
         elevation: 0, 
@@ -90,7 +92,6 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 600;
           // Centrado para pantallas grandes
           final horizontalPadding = (constraints.maxWidth - _maxContentWidth).clamp(0.0, double.infinity) / 2;
           
@@ -99,7 +100,7 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
               // Encabezado Fijo de la Lista
               Padding(
                 padding: EdgeInsets.fromLTRB(horizontalPadding + 16, 16, horizontalPadding + 16, 0),
-                child: _buildHeader(context, isNarrow),
+                child: _buildHeader(context, constraints.maxWidth),
               ),
 
               Expanded(
@@ -113,15 +114,12 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
                               padding: const EdgeInsets.only(top: 10, bottom: 20, left: 16, right: 16),
                               itemCount: reservations.length,
                               itemBuilder: (ctx, i) {
-                                final r = reservations[i];
-                                final statusColor = _getStatusColor(r.status);
+                                // USO DEL DTO CORREGIDO
+                                final ReservationHistory r = reservations[i];
                                 
-                                return HistoryCard(
-                                  // ⚠️ LÓGICA DE DATOS MANTENIDA: Usa solo tripId y el resto de la reserva
-                                  title: 'Reserva para Viaje ID: ${r.tripId}', 
-                                  subtitle: 'Puestos: ${r.seatsReserved} • Total: \$${r.totalPrice.toStringAsFixed(2)}',
-                                  status: r.status,
-                                  statusColor: statusColor,
+                                return ReservationHistoryCard(
+                                  reservation: r, // PASAMOS EL OBJETO DE RESERVA/TRAYECTO COMBINADO
+                                  statusColor: _getStatusColor(r.status),
                                   onCancel: r.status.toLowerCase() == 'confirmed'
                                       ? () => _confirmCancelation(r.id)
                                       : null,
@@ -174,7 +172,7 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
   }
   
   // Encabezado de la lista con diseño de tarjeta
-  Widget _buildHeader(BuildContext context, bool isNarrow) {
+  Widget _buildHeader(BuildContext context, double screenWidth) {
     return Card(
       elevation: 2,
       margin: EdgeInsets.zero,
@@ -190,12 +188,6 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
               'Tus Reservas Recientes',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: _darkTextColor),
             ),
-            if (!isNarrow) const Spacer(),
-            if (!isNarrow) 
-              Text(
-                'Estado | Puestos | Total',
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey.shade600),
-              ),
           ],
         ),
       ),
@@ -205,46 +197,28 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
 
 
 // --------------------------------------------------------------------------
-// 🔥 HistoryCard REDISEÑADA (Estética de Ticket/Responsive)
+// ReservationHistoryCard (CORREGIDO PARA USAR ReservationHistory)
 // --------------------------------------------------------------------------
 
-class HistoryCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final String status;
+class ReservationHistoryCard extends StatelessWidget {
+  // TIPO CORREGIDO: Ahora usa el DTO
+  final ReservationHistory reservation; 
   final Color statusColor;
   final VoidCallback? onCancel;
 
-  const HistoryCard({
+  const ReservationHistoryCard({
     super.key,
-    required this.title,
-    required this.subtitle,
-    required this.status,
+    required this.reservation,
     required this.statusColor,
     this.onCancel,
   });
 
-  // Helper para mostrar un detalle específico basado en el subtitle.
-  // Notar que aquí hacemos un poco de "parsing" del subtitle para dividirlo.
-  Widget _buildDetailChip(String iconName, String value) {
-    IconData icon;
-    String label;
-
-    if (iconName.contains('Puestos')) {
-      icon = Icons.event_seat;
-      label = 'Puestos';
-    } else if (iconName.contains('Total')) {
-      icon = Icons.payments;
-      label = 'Total';
-    } else {
-      icon = Icons.info_outline;
-      label = 'Info';
-    }
-
+  // Helper para mostrar un detalle específico
+  Widget _buildDetailChip(IconData icon, String label, String value) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, color: _primaryColor.withOpacity(0.7), size: 18),
+        Icon(icon, color: _primaryColor.withOpacity(0.7), size: 16),
         const SizedBox(width: 5),
         Text(
           '$label: ',
@@ -252,53 +226,129 @@ class HistoryCard extends StatelessWidget {
         ),
         Text(
           value,
-          style: const TextStyle(fontSize: 13, color: _darkTextColor),
+          style: const TextStyle(fontSize: 13, color: _darkTextColor, fontWeight: FontWeight.w600),
         ),
       ],
     );
   }
 
+  // Helper para el título del viaje
+  Widget _buildTripTitle(BuildContext context, String origin, String destination) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        // Origen
+        Flexible(
+          flex: 4,
+          child: Text(
+            origin,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900, 
+              color: _darkTextColor,
+              fontSize: 18,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        
+        // Icono de flecha
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Icon(
+            Icons.arrow_right_alt, 
+            color: _primaryColor, 
+            size: 24
+          ),
+        ),
+        
+        // Destino
+        Flexible(
+          flex: 4,
+          child: Text(
+            destination,
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900, 
+              color: _darkTextColor,
+              fontSize: 18,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Patrón de "ticket" con borde superior destacado
+    // ACCESO SEGURO a las propiedades del DTO
+    final String origin = reservation.origin; 
+    final String destination = reservation.destination;
+    final int seatsReserved = reservation.seatsReserved;
+    final double totalPrice = reservation.totalPrice;
+    final String status = reservation.status;
+    
+    // Coordenadas
+    final double? lat = reservation.pickupLatitude; 
+    final double? lng = reservation.pickupLongitude; 
+
+    // LÓGICA DEL ID CORTO
+    final String shortId = reservation.id.length > 8 
+        ? reservation.id.substring(0, 8) 
+        : reservation.id;
+    
+    LatLng? pickupPoint;
+    if (lat != null && lng != null) {
+      pickupPoint = LatLng(lat, lng);
+    }
+    
     return Container(
-      margin: const EdgeInsets.symmetric(vertical: 8),
+      margin: const EdgeInsets.symmetric(vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
+            color: statusColor.withOpacity(0.3),
+            blurRadius: 1,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
           ),
         ],
-        // El borde superior cambia de color según el estado
-        border: Border(top: BorderSide(color: statusColor, width: 6)),
+        // Borde superior más sutil
+        border: Border.all(color: statusColor.withOpacity(0.5), width: 1),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. TÍTULO Y ESTADO
+            // 1. TÍTULO DEL VIAJE (Origen -> Destino)
+            _buildTripTitle(context, origin, destination),
+
+            const Divider(height: 25),
+
+            // 2. DETALLES (Puestos, Total, Estado)
+            Wrap(
+              spacing: 20,
+              runSpacing: 10,
+              children: [
+                // ID CORTO UTILIZADO AQUÍ
+                _buildDetailChip(Icons.confirmation_number, 'ID Reserva', shortId),
+                _buildDetailChip(Icons.event_seat, 'Puestos', seatsReserved.toString()),
+                _buildDetailChip(Icons.payments, 'Total', '\$${totalPrice.toStringAsFixed(2)}'),
+              ],
+            ),
+            
+            const SizedBox(height: 15),
+            
+            // 3. PUNTO DE RECOGIDA Y ESTADO
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800, 
-                      color: _darkTextColor,
-                      fontSize: 18,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                // Etiqueta de Estado
+                // Detalle del Punto de Recogida
+                _buildDetailChip(Icons.pin_drop, 'Recogida', pickupPoint != null ? 'Asignado' : 'Pendiente'),
+
+                // Etiqueta de Estado (Movida aquí para mejor visibilidad)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
@@ -317,38 +367,44 @@ class HistoryCard extends StatelessWidget {
               ],
             ),
             
-            const Divider(height: 20),
+            // 4. ACCIONES (Ver Mapa / Cancelar)
+            if (onCancel != null || pickupPoint != null) ...[
+              const Divider(height: 25),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  // Botón para ver el punto en el mapa
+                  if (pickupPoint != null)
+                    TextButton.icon(
+                      onPressed: () {
+                        // Navegar a la pantalla de visualización del mapa
+                        Navigator.of(context).pushNamed(
+                          '/passenger/map/view', 
+                          arguments: {
+                            'location': pickupPoint, 
+                            'title': 'Punto de Recogida',
+                          },
+                        );
+                      },
+                      icon: const Icon(Icons.map_outlined, size: 18, color: _primaryColor),
+                      label: const Text('Ver Punto en Mapa'),
+                    ),
 
-            // 2. DETALLES (Responsive con Wrap)
-            // Dividimos el subtitle para mostrarlo como chips
-            // Ejemplo: "Puestos: 2 • Total: $50.00" -> ['Puestos: 2', 'Total: $50.00']
-            Wrap(
-              spacing: 20,
-              runSpacing: 10,
-              children: subtitle.split(' • ').map((detail) {
-                final parts = detail.split(': ');
-                if (parts.length == 2) {
-                  return _buildDetailChip(parts[0].trim(), parts[1].trim());
-                }
-                return const SizedBox.shrink(); // En caso de que el formato sea inesperado
-              }).toList(),
-            ),
-            
-            // 3. ACCIÓN (Cancelar)
-            if (onCancel != null) ...[
-              const SizedBox(height: 20),
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: onCancel,
-                  icon: const Icon(Icons.cancel_outlined, size: 18),
-                  label: const Text('CANCELAR RESERVA'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: _reservedColor,
-                    side: BorderSide(color: _reservedColor.withOpacity(0.5)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                ),
+                  const SizedBox(width: 10),
+
+                  // Botón de Cancelar
+                  if (onCancel != null)
+                    OutlinedButton.icon(
+                      onPressed: onCancel,
+                      icon: const Icon(Icons.cancel_outlined, size: 18),
+                      label: const Text('CANCELAR'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _reservedColor,
+                        side: BorderSide(color: _reservedColor.withOpacity(0.5)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                ],
               ),
             ]
           ],

@@ -1,5 +1,9 @@
+// 📝 lib/core/services/reservation_service.dart
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
+import 'package:tu_flota/features/passenger/models/reservation_model.dart'; 
+import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart'; // NECESARIO
 
 class ReservationService {
   final SupabaseClient client;
@@ -15,14 +19,18 @@ class ReservationService {
         .toList();
   }
 
-  Future<List<Reservation>> listReservationsByPassenger(String passengerId) async {
+  // 🛑 CAMBIO CLAVE: Cambiado para devolver List<ReservationHistory> usando JOIN y DTO
+  Future<List<ReservationHistory>> listReservationsByPassenger(String passengerId) async {
+    // Asumimos que la tabla reservations tiene una relación con company_schedules (trip_id)
     final data = await client
         .from('reservations')
-        .select()
+        .select('*, company_schedules(origin, destination)') // JOIN para obtener origen/destino
         .eq('passenger_id', passengerId)
         .order('id');
+        
     return (data as List<dynamic>)
-        .map((e) => Reservation.fromMap(e as Map<String, dynamic>))
+        // 🛑 Usar ReservationHistory.fromMap para mapear los datos combinados
+        .map((e) => ReservationHistory.fromMap(e as Map<String, dynamic>))
         .toList();
   }
 
