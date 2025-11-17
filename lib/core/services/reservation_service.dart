@@ -1,5 +1,3 @@
-// 📝 lib/core/services/reservation_service.dart
-
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 import 'package:tu_flota/features/passenger/models/reservation_model.dart';
@@ -24,9 +22,9 @@ class ReservationService {
         .toList();
   }
 
-  // ----------------------------
-  // 🔹 FUNCIÓN NUEVA (mantener)
-  // ----------------------------
+  // ---------------------------------------------------
+  // 🔹 Obtener emails por IDs de pasajeros
+  // ---------------------------------------------------
   Future<Map<String, String>> getPassengerEmailsByIds(List<String> passengerIds) async {
     if (passengerIds.isEmpty) return {};
 
@@ -76,9 +74,9 @@ class ReservationService {
     return result;
   }
 
-  // ----------------------------
-  // 🔹 SUSCRIPCIÓN EN TIEMPO REAL (mantener)
-  // ----------------------------
+  // ---------------------------------------------------
+  // 🔹 Suscripción realtime a reservas de un viaje
+  // ---------------------------------------------------
   RealtimeChannel subscribeReservationsForTrip({
     required String tripId,
     required OnReservationInsert onInsert,
@@ -124,33 +122,33 @@ class ReservationService {
     return channel;
   }
 
-  // ----------------------------
-  // 🔹 HISTORIAL (tu mejora + remote)
-  // ----------------------------
+  // ---------------------------------------------------
+  // 🔹 Historial por pasajero (con orden por created_at)
+  // ---------------------------------------------------
   Future<List<ReservationHistory>> listReservationsByPassenger(String passengerId) async {
     final data = await client
         .from('reservations')
         .select('''
-          *, 
+          *,
           company_schedules(
-            origin, 
-            destination, 
-            departure_time, 
-            arrival_time, 
+            origin,
+            destination,
+            departure_time,
+            arrival_time,
             companies(name)
           )
         ''')
         .eq('passenger_id', passengerId)
-        .order('created_at', ascending: false); // 🔥 tu mejora correcta
+        .order('created_at', ascending: false);
 
     return (data as List<dynamic>)
         .map((e) => ReservationHistory.fromMap(e))
         .toList();
   }
 
-  // ----------------------------
-  // 🔹 CREAR RESERVA
-  // ----------------------------
+  // ---------------------------------------------------
+  // 🔹 Crear reserva
+  // ---------------------------------------------------
   Future<Reservation> createReservation({
     required String tripId,
     required String passengerId,
@@ -172,9 +170,9 @@ class ReservationService {
     return Reservation.fromMap(inserted!);
   }
 
-  // ----------------------------
-  // 🔹 CANCELAR RESERVA
-  // ----------------------------
+  // ---------------------------------------------------
+  // 🔹 Cancelar reserva
+  // ---------------------------------------------------
   Future<Reservation> cancelReservation(String reservationId) async {
     final updated = await client
         .from('reservations')
@@ -186,15 +184,15 @@ class ReservationService {
     return Reservation.fromMap(updated!);
   }
 
-  // ----------------------------
-  // 🔹 MARCAR COMO ABORDADO
-  // ----------------------------
+  // ---------------------------------------------------
+  // 🔹 Marcar como abordado
+  // ---------------------------------------------------
   Future<Reservation> updateBoarded(String reservationId, bool boarded) async {
     final updated = await client
         .from('reservations')
         .update({
           'boarded': boarded,
-          'boarded_at': boarded ? DateTime.now().toIso8601String() : null
+          'boarded_at': boarded ? DateTime.now().toIso8601String() : null,
         })
         .eq('id', reservationId)
         .select()
