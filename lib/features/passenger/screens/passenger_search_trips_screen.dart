@@ -22,11 +22,15 @@ class PassengerSearchTripsScreen extends ConsumerStatefulWidget {
 }
 
 class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTripsScreen> {
-  String? _selectedOrigin;
-  String? _selectedDestination;
-
+  
   final _originCtrl = TextEditingController(); 
   final _destinationCtrl = TextEditingController();
+  
+  String? _selectedOrigin;
+  String? _selectedDestination;
+  
+  // 🛑 NUEVO ESTADO: Rastrea si el destino fue seleccionado de la lista popular
+  bool _hasSelectedPopularDestination = false; 
 
   @override
   void initState() {
@@ -44,8 +48,11 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
   }
 
   void _search() {
-    final origin = _selectedOrigin ?? _originCtrl.text;
-    final destination = _selectedDestination ?? _destinationCtrl.text;
+    final origin = _originCtrl.text.trim();
+    final destination = _destinationCtrl.text.trim();
+    
+    _selectedOrigin = origin;
+    _selectedDestination = destination;
     
     ref
         .read(passengerControllerProvider.notifier)
@@ -56,126 +63,129 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     Navigator.pushNamed(context, '/passenger/history');
   }
 
-  // Widget de Dropdown de Municipio (adaptado al nuevo estilo y corregido el error de aserción)
-  Widget _buildMunicipalityDropdown({
+  // Función para restablecer el destino al modo Autocomplete
+  void _clearDestination() {
+    setState(() {
+      _destinationCtrl.clear();
+      _hasSelectedPopularDestination = false;
+    });
+  }
+
+  // Nuevo Widget de Autocompletado de Municipio
+  Widget _buildMunicipalityAutocomplete({
     required String label,
-    required String? value,
-    required ValueChanged<String?> onChanged,
-    required List<String> items,
+    required TextEditingController controller,
+    required List<String> availableMunicipalities,
+    required bool isDestination, // Para manejar el caso de destino
   }) {
-    // Lógica para manejar el valor inicial (value) vs items y evitar el error de aserción.
-    final hasRealItems = items.length > 1 || (items.length == 1 && items.first != 'Cargando...');
-    final effectiveItems = hasRealItems ? items : <String>[];
     
-    // Si el valor seleccionado NO está en la lista actual de municipios, forzamos a null.
-    final effectiveValue = (value != null && hasRealItems && effectiveItems.contains(value)) ? value : null;
+    // 🛑 Manejar el caso especial cuando el destino fue seleccionado de la lista popular
+    if (isDestination && _hasSelectedPopularDestination) {
+      return TextFormField(
+        controller: controller,
+        readOnly: true, // No permitir escribir ya que ya seleccionó
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: _despegarPrimaryBlue, fontSize: 14, fontWeight: FontWeight.bold),
+          prefixIcon: const Icon(Icons.pin_drop, color: _despegarPrimaryBlue),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.clear, color: _despegarGreyText),
+            onPressed: _clearDestination, // Limpiar y volver al Autocomplete
+            tooltip: 'Cambiar Destino',
+          ),
+          filled: true,
+          fillColor: _despegarLightBlue.withOpacity(0.5),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _despegarPrimaryBlue, width: 2),
+          ),
+        ),
+      );
+    }
 
-    return DropdownButtonFormField<String>(
-      value: effectiveValue, // Usar el valor verificado
-      isExpanded: true,
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: _despegarGreyText, fontSize: 14),
-        prefixIcon: Icon(label == AppStrings.origin ? Icons.location_on : Icons.pin_drop, color: _despegarPrimaryBlue.withOpacity(0.7)),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide.none,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          // Se quita 'const' de BorderSide porque Colors.grey.shade300 no es constante
-          borderSide: BorderSide(color: Colors.grey.shade300, width: 1), 
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _despegarPrimaryBlue, width: 2),
-        ),
-      ),
-      hint: Text(items.isEmpty || items.first == 'Cargando...' ? 'Cargando...' : 'Selecciona $label'),
-      items: effectiveItems.map((String muni) {
-        return DropdownMenuItem<String>(
-          value: muni,
-          child: Text(muni, style: const TextStyle(color: _despegarDarkText)),
+    // --- Lógica del Autocomplete Original para Origen y Destino (si no ha seleccionado popular) ---
+    Iterable<String> _municipalityFilter(TextEditingValue textEditingValue) {
+      if (textEditingValue.text.isEmpty) {
+        return const Iterable<String>.empty();
+      }
+      final query = textEditingValue.text.toLowerCase();
+      return availableMunicipalities.where((municipality) {
+        return municipality.toLowerCase().contains(query);
+      }).toList();
+    }
+
+    return Autocomplete<String>(
+      // textEditingController: controller, // Se omite para evitar el error de FocusNode
+      
+      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+        // Vincula el controlador externo (el del Stateful Widget) con el controlador interno del Autocomplete
+        controller.text = textEditingController.text;
+        
+        return TextFormField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          onFieldSubmitted: (v) {
+             onFieldSubmitted(); 
+             _search(); 
+          },
+          decoration: InputDecoration(
+            labelText: label,
+            labelStyle: const TextStyle(color: _despegarGreyText, fontSize: 14),
+            prefixIcon: Icon(label == AppStrings.origin ? Icons.location_on : Icons.pin_drop, color: _despegarPrimaryBlue.withOpacity(0.7)),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey.shade300, width: 1), 
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: _despegarPrimaryBlue, width: 2),
+            ),
+          ),
         );
-      }).toList(),
-      onChanged: hasRealItems ? onChanged : null,
-      dropdownColor: Colors.white,
-      iconEnabledColor: _despegarPrimaryBlue,
+      },
+      optionsBuilder: _municipalityFilter,
+      onSelected: (String selection) {
+        controller.text = selection;
+        FocusScope.of(context).unfocus();
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4.0,
+            borderRadius: BorderRadius.circular(10),
+            child: SizedBox(
+              height: 200.0,
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: options.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final String option = options.elementAt(index);
+                  return ListTile(
+                    title: Text(option),
+                    onTap: () {
+                      onSelected(option);
+                      _search();
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
-  // Widget para el formulario de búsqueda principal (rediseñado al estilo Despegar)
-  Widget _buildSearchForm(BuildContext context, bool isNarrow, List<String> availableMunicipalities) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: _despegarPrimaryBlue.withOpacity(0.1),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: _despegarLightBlue,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.directions_bus, color: _despegarPrimaryBlue.withOpacity(0.8), size: 20),
-                const SizedBox(width: 8),
-                const Text('Viajes en Bus', style: TextStyle(color: _despegarPrimaryBlue, fontWeight: FontWeight.bold, fontSize: 13)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          _buildMunicipalityDropdown(
-            label: AppStrings.origin,
-            value: _selectedOrigin,
-            items: availableMunicipalities,
-            onChanged: (v) => setState(() => _selectedOrigin = v),
-          ),
-          const SizedBox(height: 15),
-          _buildMunicipalityDropdown(
-            label: AppStrings.destination,
-            value: _selectedDestination,
-            items: availableMunicipalities,
-            onChanged: (v) => setState(() => _selectedDestination = v),
-          ),
-          const SizedBox(height: 20),
-
-          ElevatedButton.icon(
-            onPressed: _search,
-            icon: const Icon(Icons.search),
-            label: const Text(AppStrings.search, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _despegarPrimaryBlue,
-              foregroundColor: Colors.white,
-              minimumSize: const Size(double.infinity, 55),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              elevation: 5,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // Widget para la sección de "Ciudades Populares"
+  // Nuevo Widget para la sección de "Destinos más buscados"
   Widget _buildPopularCitiesSection(BuildContext context, bool isNarrow) {
     final List<String> popularCities = ['Pasto', 'Ipiales', 'Tumaco', 'Túquerres'];
 
@@ -186,7 +196,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
         children: [
           const SizedBox(height: 30),
           Text(
-            'Ciudades más visitadas',
+            'Destinos más buscados',
             style: Theme.of(context).textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
               color: _despegarDarkText,
@@ -202,10 +212,14 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
                 final city = popularCities[index];
                 return GestureDetector(
                   onTap: () {
-                    setState(() => _selectedDestination = city);
-                    _search();
-                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Buscando viajes a $city...')),
+                    // 🛑 ¡CORRECCIÓN FINAL! Seteamos el texto y la bandera de estado.
+                    setState(() {
+                      _destinationCtrl.text = city; 
+                      _hasSelectedPopularDestination = true; // Activa el modo TextFormField
+                    });
+                    
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Destino seleccionado: $city. Ahora ingresa el origen.')),
                     );
                   },
                   child: Container(
@@ -241,7 +255,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
                           ),
                         ),
                         const Text(
-                          'Ver viajes',
+                          'Seleccionar Destino',
                           style: TextStyle(color: _despegarPrimaryBlue, fontSize: 12),
                         ),
                       ],
@@ -256,9 +270,81 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     );
   }
 
-  // **********************************************
-  // 🚀 Nuevas funciones para la Sección de Viajes
-  // **********************************************
+  // Widget para el formulario de búsqueda principal (rediseñado al estilo Despegar)
+  Widget _buildSearchForm(BuildContext context, bool isNarrow, List<String> availableMunicipalities) {
+    final bool isSearchEnabled = availableMunicipalities.length > 1 || (availableMunicipalities.length == 1 && availableMunicipalities.first != 'Cargando...');
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _despegarPrimaryBlue.withOpacity(0.1),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: _despegarLightBlue,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.directions_bus, color: _despegarPrimaryBlue, size: 20),
+                SizedBox(width: 8),
+                Text('Viajes en Bus', style: TextStyle(color: _despegarPrimaryBlue, fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Campo de Origen con Autocompletado (Autocomplete normal)
+          _buildMunicipalityAutocomplete(
+            label: AppStrings.origin,
+            controller: _originCtrl,
+            availableMunicipalities: isSearchEnabled ? availableMunicipalities : ['Cargando...'],
+            isDestination: false,
+          ),
+          const SizedBox(height: 15),
+          
+          // Campo de Destino: Usará el Autocomplete O el TextFormField simple.
+          _buildMunicipalityAutocomplete(
+            label: AppStrings.destination,
+            controller: _destinationCtrl,
+            availableMunicipalities: isSearchEnabled ? availableMunicipalities : ['Cargando...'],
+            isDestination: true, // Indica que es el campo de destino
+          ),
+          const SizedBox(height: 20),
+
+          ElevatedButton.icon(
+            onPressed: isSearchEnabled ? _search : null, // Deshabilitar si no hay municipios
+            icon: const Icon(Icons.search),
+            label: Text(
+              isSearchEnabled ? AppStrings.search : 'Cargando Municipios...', 
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _despegarPrimaryBlue,
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 55),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   // Encabezado de la Sección de Viajes
   Widget _buildTripsSectionHeader(BuildContext context) {
@@ -273,18 +359,18 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: _despegarLightBlue, width: 2),
         ),
-        child: Row(
+        child: const Row(
           children: [
             Icon(Icons.departure_board_outlined, color: _despegarPrimaryBlue, size: 24),
-            const SizedBox(width: 10),
+            SizedBox(width: 10),
             Text(
               'Resultados de la Búsqueda',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              style: TextStyle(
                 fontWeight: FontWeight.bold,
                 color: _despegarPrimaryBlue,
               ),
             ),
-            const Spacer(),
+            Spacer(),
             Icon(Icons.filter_list, color: _despegarGreyText),
           ],
         ),
@@ -363,7 +449,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     );
   }
 
-  // 🚀 MEJORA DE DISEÑO: Sección de Próximos Viajes (función contenedora)
+  // Sección de Próximos Viajes (función contenedora)
   Widget _buildTripsSection(BuildContext context, List<CompanySchedule> trips, bool isNarrow, bool isLoading, String? error) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16.0 : 0),
@@ -404,6 +490,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     final state = ref.watch(passengerControllerProvider);
     final trips = state.trips;
     
+    // Si los municipios están vacíos, mostrar "Cargando..."
     final availableMunicipalities = state.municipalities.isEmpty
                                       ? ['Cargando...'] 
                                       : state.municipalities;
@@ -413,11 +500,11 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
-        title: Row(
+        title: const Row(
           children: [
             Icon(Icons.bus_alert, color: _despegarPrimaryBlue),
-            const SizedBox(width: 8),
-            Text('Tu Flota', style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            SizedBox(width: 8),
+            Text('Tu Flota', style: TextStyle(
               color: _despegarDarkText, 
               fontWeight: FontWeight.bold
             )),
@@ -482,17 +569,14 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Mensaje visible justo encima de la tarjeta flotante
+                        // Sección de destinos más buscados
                         Padding(
-                          padding: EdgeInsets.symmetric(horizontal: isNarrow ? 24.0 : horizontalPadding + 16),
-                          child: const Text(
-                            'Busca y reserva tus viajes en bus de manera sencilla y rápida.',
-                            style: TextStyle(color: _despegarDarkText, fontSize: 16),
-                            textAlign: TextAlign.center,
-                          ),
+                          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                          child: _buildPopularCitiesSection(context, isNarrow),
                         ),
-                        const SizedBox(height: 15),
-
+                        
+                        const SizedBox(height: 20),
+                        
                         // Tarjeta de Búsqueda
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
@@ -502,10 +586,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
                     ),
                   ),
                   
-                  // 3. Sección de ciudades populares
-                  _buildPopularCitiesSection(context, isNarrow),
-                  
-                  // 4. Sección de Próximos Viajes (MEJORADA)
+                  // 3. Sección de Próximos Viajes
                   _buildTripsSection(
                     context, 
                     trips, 
@@ -520,7 +601,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
         ),
       ),
       
-      // 🚀 AÑADIR EL FLOATING ACTION BUTTON AQUÍ
+      // AÑADIR EL FLOATING ACTION BUTTON AQUÍ
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           // Navegar a la pantalla del asistente de chat

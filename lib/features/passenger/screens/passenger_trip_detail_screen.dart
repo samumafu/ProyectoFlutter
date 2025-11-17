@@ -6,14 +6,14 @@ import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 import 'package:tu_flota/core/services/supabase_service.dart';
 
 import 'package:latlong2/latlong.dart';
-import 'package:tu_flota/core/constants/route_coordinates.dart'; // Contiene getCoordinates()
+import 'package:tu_flota/core/constants/route_coordinates.dart';
+import 'package:intl/intl.dart'; // Importación necesaria para DateFormat
 
 // Definiciones de estilo
 const Color _primaryColor = Color(0xFF1E88E5);
 const Color _accentColor = Color(0xFF00C853);
 const Color _reservedColor = Color(0xFFC62828);
 const Color _selectedColor = Color(0xFF43A047);
-// 🟢 NUEVO COLOR: para indicar que falta la selección
 const Color _warningColor = Color(0xFFF9A825); 
 const Color _availableColor = Color(0xFFE3F2FD);
 
@@ -32,8 +32,35 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
   final Set<int> _selectedSeats = {};
   final List<int> _mockReservedSeats = [3, 4, 10, 11]; 
   
-  // 🟢 NUEVO ESTADO: Punto de recogida seleccionado por el usuario
+  // Estado: Punto de recogida seleccionado por el usuario
   LatLng? _pickupPoint; 
+
+  // 🟢 HELPER ACTUALIZADO: Para formatear la hora, manejando String o DateTime
+  String _formatTime(dynamic timeValue) {
+    DateTime date;
+    
+    if (timeValue is DateTime) {
+      date = timeValue;
+    } else if (timeValue is String) {
+      try {
+        // Intenta parsear el string como un DateTime completo (ISO 8601)
+        date = DateTime.parse(timeValue);
+      } catch (e) {
+        // Si falla (ej: solo es "17:30:00"), añade una fecha base para parsear solo el tiempo
+        try {
+           // Asume que la cadena es solo 'HH:mm:ss' o 'HH:mm' y añade una fecha.
+           date = DateTime.parse('2000-01-01T$timeValue');
+        } catch (_) {
+           return timeValue; // Devuelve el string sin parsear si todo falla
+        }
+      }
+    } else {
+      return 'N/A'; // Si no es ni String ni DateTime
+    }
+    
+    // Formatear el objeto DateTime resultante a HH:mm
+    return DateFormat('HH:mm').format(date);
+  }
 
   @override
   void initState() {
@@ -43,21 +70,18 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
   
   // --- LÓGICA DE SELECCIÓN DE PUNTO DE RECOGIDA ---
   Future<void> _navigateToMapAndSelectPickup() async {
-    // 1. Obtener coordenadas de origen/destino (municipios)
     final LatLng originCoords = getCoordinates(_s.origin);
     final LatLng destinationCoords = getCoordinates(_s.destination);
 
-    // 2. Navegar al mapa y esperar el resultado (Navigator.pop(context, LatLng))
     final LatLng? selectedPickup = await Navigator.pushNamed(
       context, 
-      '/passenger/map/route', // Asegúrate de que esta ruta esté configurada para RouteMapScreen
+      '/passenger/map/route',
       arguments: {
         'origin': originCoords,
         'destination': destinationCoords,
       },
     ) as LatLng?;
 
-    // 3. Si se seleccionó un punto, actualizar el estado
     if (selectedPickup != null) {
       setState(() {
         _pickupPoint = selectedPickup;
@@ -85,7 +109,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       return;
     }
     
-    // 🟢 PASO 1: Verificar si el punto de recogida ha sido seleccionado
+    // PASO 1: Verificar si el punto de recogida ha sido seleccionado
     if (_pickupPoint == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -96,25 +120,20 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
           ),
         );
       }
-      // Llamar al mapa para que el usuario seleccione el punto
       await _navigateToMapAndSelectPickup();
-      // Salir de la función _reserve. El usuario debe presionar reservar de nuevo.
       return;
     }
 
 
-    // 🟢 PASO 2: Procesar la reserva (solo se llega aquí si _pickupPoint != null)
+    // PASO 2: Procesar la reserva (solo se llega aquí si _pickupPoint != null)
     try {
-      // Nota: Aquí deberías pasar _pickupPoint al servicio de reserva si tu API lo soporta.
-      // Por ahora, solo lo usamos para validar el flujo.
       await ref.read(passengerControllerProvider.notifier).reserveSeats(schedule: _s, seats: seats);
       
       if (!mounted) return;
       
-      // Mensaje de éxito
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStrings.success} - Puestos: ${_selectedSeats.join(', ')}'), backgroundColor: _accentColor));
       
-      // Navegación de vuelta al dashboard/home (ya no navegamos al mapa después de reservar)
+      // Navegación de vuelta al dashboard/home
       Navigator.pop(context);
       
     } catch (_) {
@@ -171,15 +190,15 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     final totalPrice = _s.price * _selectedSeats.length;
     final totalSeats = _s.totalSeats; 
     
-    // 🟢 Texto dinámico para el botón principal
+    // Texto dinámico para el botón principal
     final buttonText = _pickupPoint == null 
         ? 'SELECCIONAR PUNTO DE RECOGIDA' 
         : 'RESERVAR ${_selectedSeats.length} PUESTO(S) | \$${totalPrice.toStringAsFixed(2)}';
     
-    // 🟢 Color dinámico para el botón principal
+    // Color dinámico para el botón principal
     final buttonColor = _pickupPoint == null ? _warningColor : _accentColor;
     
-    // 🟢 Acción dinámica para el botón principal
+    // Acción dinámica para el botón principal
     final VoidCallback buttonAction = _pickupPoint == null ? _navigateToMapAndSelectPickup : _reserve;
 
 
@@ -220,7 +239,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           tripDetailsWidget,
-                          // 🟢 Mostrar el punto de recogida seleccionado
+                          // Mostrar el punto de recogida seleccionado
                           if (_pickupPoint != null) 
                             _buildPickupDisplay(context),
                           
@@ -240,9 +259,9 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ElevatedButton.icon(
-          // 🟢 Usar la acción dinámica (navegar al mapa o reservar)
-          onPressed: _selectedSeats.isEmpty && _pickupPoint == null ? null : buttonAction, 
-          // 🟢 Usar el texto y color dinámicos
+          // La reserva solo se activa si hay puestos seleccionados O si se está en el paso de seleccionar el punto de recogida
+          onPressed: (_selectedSeats.isNotEmpty || _pickupPoint == null) ? buttonAction : null, 
+          // Usar el texto y color dinámicos
           icon: Icon(_pickupPoint == null ? Icons.map : Icons.check_circle_outline),
           label: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
@@ -256,7 +275,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     );
   }
   
-  // 🟢 Widget para mostrar el punto de recogida seleccionado
+  // Widget para mostrar el punto de recogida seleccionado
   Widget _buildPickupDisplay(BuildContext context) {
     if (_pickupPoint == null) return const SizedBox.shrink();
     return Card(
@@ -295,7 +314,6 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
 
   // Widget para los detalles del viaje
   Widget _buildTripDetails(BuildContext context, int totalSeats) {
-    // ... (El resto del código de _buildTripDetails y _detailRow se mantiene igual)
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -317,14 +335,15 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
               ],
             ),
             const Divider(height: 25),
-            _detailRow(Icons.schedule, 'Departure Time', _s.departureTime),
-            _detailRow(Icons.access_time, 'Arrival Time', _s.arrivalTime),
-            _detailRow(Icons.directions_bus, 'Vehicle Type', _s.vehicleType ?? 'N/A'),
-            _detailRow(Icons.badge, 'Vehicle ID', _s.vehicleId ?? 'N/A'),
-            _detailRow(Icons.person_pin, 'Driver Name', 'Not Linked (N/A)'), 
+            // CORRECCIÓN APLICADA AQUÍ: Se usa _formatTime para las horas
+            _detailRow(Icons.schedule, 'Hora de Salida', _formatTime(_s.departureTime)),
+            _detailRow(Icons.access_time, 'Hora de Llegada', _formatTime(_s.arrivalTime)),
+            _detailRow(Icons.directions_bus, 'Tipo de Vehículo', _s.vehicleType ?? 'N/A'),
+            _detailRow(Icons.badge, 'Placa del Vehículo', _s.vehicleId ?? 'N/A'),
+            _detailRow(Icons.person_pin, 'Nombre del Conductor', 'N/A'), 
             const Divider(height: 25),
-            _detailRow(Icons.money, 'Price per seat', '\$${_s.price.toStringAsFixed(2)}'),
-            _detailRow(Icons.event_seat, 'Seats / Total', '${_s.availableSeats} / $totalSeats'),
+            _detailRow(Icons.money, 'Precio por Puesto', '\$${_s.price.toStringAsFixed(2)}'),
+            _detailRow(Icons.event_seat, 'Puestos Disponibles / Total', '${_s.availableSeats} / $totalSeats'),
           ],
         ),
       ),
@@ -350,7 +369,6 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
 
   // Widget de selección gráfica de asientos
   Widget _buildSeatSelection(BuildContext context, int totalSeats) {
-    // ... (El resto del código de selección de asientos se mantiene igual)
     const int seatsPerRow = 4; 
     final int totalRows = (totalSeats / seatsPerRow).ceil();
 
@@ -371,7 +389,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
             color: Colors.grey.shade300,
             borderRadius: BorderRadius.circular(8),
           ),
-          child: const Text('Driver', style: TextStyle(fontSize: 10)),
+          child: const Text('Conductor', style: TextStyle(fontSize: 10)),
         ),
         const SizedBox(height: 10),
         
