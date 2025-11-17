@@ -9,8 +9,9 @@ import 'package:tu_flota/core/services/trip_service.dart';
 import 'package:tu_flota/core/services/reservation_service.dart';
 import 'package:tu_flota/core/services/chat_service.dart';
 import 'package:tu_flota/core/services/supabase_service.dart';
+import 'package:tu_flota/features/passenger/models/reservation_model.dart';
+import 'package:tu_flota/features/company/models/chat_message_model.dart';
 
-// 🚨 CORRECCIONES DE IMPORTACIÓN:
 // 1. Importación del modelo Driver (que movimos a su propia carpeta)
 import 'package:tu_flota/features/driver/models/driver_model.dart'; 
 // 2. Importación de Company (que está en su ruta original)

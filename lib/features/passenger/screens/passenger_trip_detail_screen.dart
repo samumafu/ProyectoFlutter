@@ -5,11 +5,16 @@ import 'package:tu_flota/features/passenger/controllers/passenger_controller.dar
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 import 'package:tu_flota/core/services/supabase_service.dart';
 
+import 'package:latlong2/latlong.dart';
+import 'package:tu_flota/core/constants/route_coordinates.dart'; // Contiene getCoordinates()
+
 // Definiciones de estilo
 const Color _primaryColor = Color(0xFF1E88E5);
 const Color _accentColor = Color(0xFF00C853);
 const Color _reservedColor = Color(0xFFC62828);
 const Color _selectedColor = Color(0xFF43A047);
+// 🟢 NUEVO COLOR: para indicar que falta la selección
+const Color _warningColor = Color(0xFFF9A825); 
 const Color _availableColor = Color(0xFFE3F2FD);
 
 class PassengerTripDetailScreen extends ConsumerStatefulWidget {
@@ -25,16 +30,104 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
   
   // Variables para la selección de puestos
   final Set<int> _selectedSeats = {};
-  // Los asientos ocupados deben cargarse del controlador (simulación por ahora)
   final List<int> _mockReservedSeats = [3, 4, 10, 11]; 
+  
+  // 🟢 NUEVO ESTADO: Punto de recogida seleccionado por el usuario
+  LatLng? _pickupPoint; 
 
   @override
   void initState() {
     super.initState();
-    // Aseguramos que el objeto sea el modelo CompanySchedule
     _s = widget.schedule as CompanySchedule;
   }
+  
+  // --- LÓGICA DE SELECCIÓN DE PUNTO DE RECOGIDA ---
+  Future<void> _navigateToMapAndSelectPickup() async {
+    // 1. Obtener coordenadas de origen/destino (municipios)
+    final LatLng originCoords = getCoordinates(_s.origin);
+    final LatLng destinationCoords = getCoordinates(_s.destination);
 
+    // 2. Navegar al mapa y esperar el resultado (Navigator.pop(context, LatLng))
+    final LatLng? selectedPickup = await Navigator.pushNamed(
+      context, 
+      '/passenger/map/route', // Asegúrate de que esta ruta esté configurada para RouteMapScreen
+      arguments: {
+        'origin': originCoords,
+        'destination': destinationCoords,
+      },
+    ) as LatLng?;
+
+    // 3. Si se seleccionó un punto, actualizar el estado
+    if (selectedPickup != null) {
+      setState(() {
+        _pickupPoint = selectedPickup;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Punto de recogida seleccionado. Ahora puedes reservar.'),
+            backgroundColor: _accentColor,
+            duration: Duration(milliseconds: 2000),
+          ),
+        );
+      }
+    }
+  }
+  
+  // --- LÓGICA DE RESERVA MODIFICADA ---
+  Future<void> _reserve() async {
+    final seats = _selectedSeats.length;
+    
+    if (seats == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por favor, selecciona al menos un puesto.')));
+      }
+      return;
+    }
+    
+    // 🟢 PASO 1: Verificar si el punto de recogida ha sido seleccionado
+    if (_pickupPoint == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Importante! Debes seleccionar un punto de recogida antes de reservar.'),
+            backgroundColor: _warningColor,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      // Llamar al mapa para que el usuario seleccione el punto
+      await _navigateToMapAndSelectPickup();
+      // Salir de la función _reserve. El usuario debe presionar reservar de nuevo.
+      return;
+    }
+
+
+    // 🟢 PASO 2: Procesar la reserva (solo se llega aquí si _pickupPoint != null)
+    try {
+      // Nota: Aquí deberías pasar _pickupPoint al servicio de reserva si tu API lo soporta.
+      // Por ahora, solo lo usamos para validar el flujo.
+      await ref.read(passengerControllerProvider.notifier).reserveSeats(schedule: _s, seats: seats);
+      
+      if (!mounted) return;
+      
+      // Mensaje de éxito
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStrings.success} - Puestos: ${_selectedSeats.join(', ')}'), backgroundColor: _accentColor));
+      
+      // Navegación de vuelta al dashboard/home (ya no navegamos al mapa después de reservar)
+      Navigator.pop(context);
+      
+    } catch (_) {
+      if (!mounted) return;
+      final err = ref.read(passengerControllerProvider).error ?? AppStrings.actionFailed;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: _reservedColor));
+      final client = ref.read(supabaseProvider);
+      if (client.auth.currentUser == null) {
+        Navigator.pushNamed(context, '/auth/login');
+      }
+    }
+  }
+  
   void _toggleSeat(int seatNumber) {
     if (_mockReservedSeats.contains(seatNumber)) {
       if (mounted) {
@@ -49,7 +142,6 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       return; 
     }
     
-    // Lógica para seleccionar/deseleccionar puestos disponibles
     setState(() {
       if (_selectedSeats.contains(seatNumber)) {
         _selectedSeats.remove(seatNumber);
@@ -73,37 +165,23 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     });
   }
 
-  Future<void> _reserve() async {
-    final seats = _selectedSeats.length;
-    
-    if (seats == 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Por favor, selecciona al menos un puesto.')));
-      }
-      return;
-    }
-
-    try {
-      await ref.read(passengerControllerProvider.notifier).reserveSeats(schedule: _s, seats: seats);
-      
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStrings.success} - Puestos: ${_selectedSeats.join(', ')}'), backgroundColor: _accentColor));
-      Navigator.pushNamedAndRemoveUntil(context, '/passenger/dashboard', (route) => false);
-    } catch (_) {
-      if (!mounted) return;
-      final err = ref.read(passengerControllerProvider).error ?? AppStrings.actionFailed;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err), backgroundColor: _reservedColor));
-      final client = ref.read(supabaseProvider);
-      if (client.auth.currentUser == null) {
-        Navigator.pushNamed(context, '/auth/login');
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final totalPrice = _s.price * _selectedSeats.length;
     final totalSeats = _s.totalSeats; 
+    
+    // 🟢 Texto dinámico para el botón principal
+    final buttonText = _pickupPoint == null 
+        ? 'SELECCIONAR PUNTO DE RECOGIDA' 
+        : 'RESERVAR ${_selectedSeats.length} PUESTO(S) | \$${totalPrice.toStringAsFixed(2)}';
+    
+    // 🟢 Color dinámico para el botón principal
+    final buttonColor = _pickupPoint == null ? _warningColor : _accentColor;
+    
+    // 🟢 Acción dinámica para el botón principal
+    final VoidCallback buttonAction = _pickupPoint == null ? _navigateToMapAndSelectPickup : _reserve;
+
 
     return Scaffold(
       backgroundColor: Colors.grey.shade50,
@@ -142,6 +220,10 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           tripDetailsWidget,
+                          // 🟢 Mostrar el punto de recogida seleccionado
+                          if (_pickupPoint != null) 
+                            _buildPickupDisplay(context),
+                          
                           const SizedBox(height: 20),
                           Container(
                             padding: const EdgeInsets.all(16),
@@ -158,11 +240,13 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ElevatedButton.icon(
-          onPressed: _reserve,
-          icon: const Icon(Icons.check_circle_outline),
-          label: Text('RESERVAR ${_selectedSeats.length} PUESTO(S) | \$${totalPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.bold)),
+          // 🟢 Usar la acción dinámica (navegar al mapa o reservar)
+          onPressed: _selectedSeats.isEmpty && _pickupPoint == null ? null : buttonAction, 
+          // 🟢 Usar el texto y color dinámicos
+          icon: Icon(_pickupPoint == null ? Icons.map : Icons.check_circle_outline),
+          label: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
-            backgroundColor: _accentColor,
+            backgroundColor: buttonColor,
             foregroundColor: Colors.white,
             minimumSize: const Size(double.infinity, 55),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -171,9 +255,47 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       ),
     );
   }
+  
+  // 🟢 Widget para mostrar el punto de recogida seleccionado
+  Widget _buildPickupDisplay(BuildContext context) {
+    if (_pickupPoint == null) return const SizedBox.shrink();
+    return Card(
+      color: Colors.lightGreen.shade50,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: _accentColor, width: 1.5)),
+      margin: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Row(
+          children: [
+            const Icon(Icons.location_on, color: _accentColor, size: 28),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Punto de Recogida Seleccionado:', style: TextStyle(fontWeight: FontWeight.bold, color: _accentColor)),
+                  Text(
+                    'Lat: ${_pickupPoint!.latitude.toStringAsFixed(4)}, Lng: ${_pickupPoint!.longitude.toStringAsFixed(4)}',
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit, color: _primaryColor),
+              onPressed: _navigateToMapAndSelectPickup,
+              tooltip: 'Cambiar punto de recogida',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   // Widget para los detalles del viaje
   Widget _buildTripDetails(BuildContext context, int totalSeats) {
+    // ... (El resto del código de _buildTripDetails y _detailRow se mantiene igual)
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -197,15 +319,11 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
             const Divider(height: 25),
             _detailRow(Icons.schedule, 'Departure Time', _s.departureTime),
             _detailRow(Icons.access_time, 'Arrival Time', _s.arrivalTime),
-            // ✅ USANDO EL CAMPO vehicleType DEL MODELO
             _detailRow(Icons.directions_bus, 'Vehicle Type', _s.vehicleType ?? 'N/A'),
-            // ✅ USANDO EL CAMPO vehicleId DEL MODELO (Placa/ID)
             _detailRow(Icons.badge, 'Vehicle ID', _s.vehicleId ?? 'N/A'),
-            // 🚨 El nombre del conductor NO existe en el modelo, lo marcamos como no vinculado
             _detailRow(Icons.person_pin, 'Driver Name', 'Not Linked (N/A)'), 
             const Divider(height: 25),
             _detailRow(Icons.money, 'Price per seat', '\$${_s.price.toStringAsFixed(2)}'),
-            // ✅ USANDO availableSeats y totalSeats del modelo
             _detailRow(Icons.event_seat, 'Seats / Total', '${_s.availableSeats} / $totalSeats'),
           ],
         ),
@@ -232,7 +350,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
 
   // Widget de selección gráfica de asientos
   Widget _buildSeatSelection(BuildContext context, int totalSeats) {
-    // Definimos 4 asientos por fila (layout común de bus)
+    // ... (El resto del código de selección de asientos se mantiene igual)
     const int seatsPerRow = 4; 
     final int totalRows = (totalSeats / seatsPerRow).ceil();
 
@@ -272,7 +390,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: List.generate(seatsPerRow, (colIndex) {
                     final seatNumber = (rowIndex * seatsPerRow) + colIndex + 1;
-                    if (seatNumber > totalSeats) return const SizedBox.shrink(); // Oculta si el asiento excede el total
+                    if (seatNumber > totalSeats) return const SizedBox.shrink();
 
                     final isReserved = _mockReservedSeats.contains(seatNumber);
                     final isSelected = _selectedSeats.contains(seatNumber);
