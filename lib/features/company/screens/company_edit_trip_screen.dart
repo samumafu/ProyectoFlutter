@@ -4,6 +4,7 @@ import 'package:tu_flota/core/constants/app_strings.dart';
 import 'package:tu_flota/features/company/controllers/company_controller.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 import 'dart:convert';
+import 'package:intl/intl.dart'; // Necesario para un mejor formato de fecha/hora
 
 class CompanyEditTripScreen extends ConsumerStatefulWidget {
   final Object? schedule;
@@ -31,8 +32,9 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
   String? _assignedDriverId;
 
   // Colores para el diseño
-  static const Color _primaryColor = Color(0xFF1E88E5);
-  static const Color _secondaryColor = Color(0xFF00C853);
+  static const Color _primaryColor = Color(0xFF1E88E5); // Azul Corporativo
+  static const Color _secondaryColor = Color(0xFF00C853); // Verde (Éxito/Guardar)
+  static const Color _backgroundColor = Color(0xFFF0F4F8); // Fondo claro y suave
 
   @override
   void initState() {
@@ -40,14 +42,22 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
     _s = widget.schedule as CompanySchedule;
     _origin = TextEditingController(text: _s.origin);
     _destination = TextEditingController(text: _s.destination);
-    _departure = TextEditingController(text: _s.departureTime);
+    // Usar formato más legible para la visualización (aunque se guarda en ISO)
+    _departure = TextEditingController(text: _s.departureTime); 
     _arrival = TextEditingController(text: _s.arrivalTime);
-    _price = TextEditingController(text: _s.price.toString());
+    _price = TextEditingController(text: _s.price.toStringAsFixed(2)); // Mostrar precio con 2 decimales
     _availableSeats = TextEditingController(text: _s.availableSeats.toString());
     _totalSeats = TextEditingController(text: _s.totalSeats.toString());
     _vehicleType = TextEditingController(text: _s.vehicleType ?? '');
     _vehicleId = TextEditingController(text: _s.vehicleId ?? '');
-    _additionalInfo = TextEditingController(text: jsonEncode(_s.additionalInfo ?? {}));
+    
+    // Formatear JSON de forma legible
+    try {
+        _additionalInfo = TextEditingController(text: const JsonEncoder.withIndent('  ').convert(_s.additionalInfo ?? {}));
+    } catch (_) {
+        _additionalInfo = TextEditingController(text: jsonEncode(_s.additionalInfo ?? {}));
+    }
+
     _isActive = _s.isActive;
     _assignedDriverId = _s.assignedDriverId;
     Future.microtask(() async {
@@ -108,27 +118,33 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
   Future<void> _pickDateTime({required bool isDeparture}) async {
     final now = DateTime.now();
     
-    // Si el campo tiene un valor previo, úsalo como valor inicial (si es válido)
-    final initialDate = (isDeparture ? _departure.text : _arrival.text).isNotEmpty
-        ? DateTime.tryParse((isDeparture ? _departure.text : _arrival.text).trim()) ?? now
-        : now;
+    // Tratar de parsear el texto actual del campo
+    DateTime? currentDateTime;
+    try {
+      // Intenta parsear desde ISO (que es como se guarda)
+      currentDateTime = DateTime.parse((isDeparture ? _departure.text : _arrival.text).trim());
+    } catch (_) {
+      // Si falla, usa 'now'
+      currentDateTime = now;
+    }
     
-    // Aseguramos que la fecha mínima sea HOY, para no programar viajes en el pasado
+    // Aseguramos que la fecha mínima sea HOY
     final firstDate = DateTime(now.year, now.month, now.day);
+    
+    // La fecha inicial debe ser la fecha actual del campo o 'now', sin ser anterior al primer día.
+    final initialDate = currentDateTime!.isAfter(firstDate) ? currentDateTime : firstDate;
+
 
     final date = await showDatePicker(
       context: context,
-      // Usar initialDate si es posterior a firstDate, si no, usar firstDate
-      initialDate: initialDate.isAfter(firstDate) ? initialDate : firstDate,
-      firstDate: firstDate, // FIX: Solo fechas de hoy en adelante
-      lastDate: DateTime(now.year + 5), // Límite de 5 años
+      initialDate: initialDate,
+      firstDate: firstDate,
+      lastDate: DateTime(now.year + 5),
       helpText: AppStrings.pickDate,
     );
     if (date == null) return;
     
-    // Si la fecha seleccionada es HOY, la hora inicial debe ser la actual
-    // Si no es hoy, la hora inicial es la hora actual del campo o 8:00
-    TimeOfDay initialTime = TimeOfDay.fromDateTime(initialDate.isAfter(now) ? initialDate : now);
+    TimeOfDay initialTime = TimeOfDay.fromDateTime(currentDateTime!.isAfter(now) ? currentDateTime : now);
     
     final time = await showTimePicker(
       context: context,
@@ -139,7 +155,7 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
     
     final selectedDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
 
-    // FIX ADICIONAL: Validación final para asegurar que no se seleccione hora en el pasado
+    // Validación final para asegurar que no se seleccione hora en el pasado
     if (selectedDateTime.isBefore(now.subtract(const Duration(minutes: 1)))) {
         if (mounted) {
              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -150,7 +166,8 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
         return;
     }
     
-    final iso = ref.read(companyControllerProvider.notifier).formatIso(date, time);
+    // Guardar en formato ISO (requerido por la lógica de negocio)
+    final iso = selectedDateTime.toIso8601String(); 
     setState(() {
       if (isDeparture) {
         _departure.text = iso;
@@ -182,7 +199,7 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFEFEFF4), // Fondo más limpio
+      backgroundColor: _backgroundColor, // Fondo más limpio
       appBar: AppBar(
         backgroundColor: _primaryColor, // Color principal para el AppBar
         elevation: 0,
@@ -192,8 +209,8 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
         actions: [
           IconButton(
             onPressed: _save,
-            icon: const Icon(Icons.save_rounded),
-            tooltip: 'Guardar',
+            icon: const Icon(Icons.check_circle_outline, size: 28),
+            tooltip: 'Guardar cambios',
           )
         ],
       ),
@@ -204,196 +221,219 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
             final isWide = constraints.maxWidth > 780;
             
             // Widget para agrupar campos y dar estilo de tarjeta
-            // Se usa String literal para el título ya que AppStrings.xxx no existe.
             Widget buildSection({required String title, required List<Widget> fields, required IconData icon}) {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 24.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Icon(icon, color: _primaryColor, size: 24),
-                        const SizedBox(width: 8),
-                        Text(
-                          title,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
-                        ),
-                      ],
+                    // Título de Sección estilizado
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: Row(
+                        children: [
+                          Icon(icon, color: _primaryColor, size: 28),
+                          const SizedBox(width: 10),
+                          Text(
+                            title,
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: Colors.black87),
+                          ),
+                        ],
+                      ),
                     ),
-                    const Divider(color: Colors.grey, height: 20, thickness: 0.5),
-                    ...fields,
+                    // Usar un Container sutil como tarjeta para la sección
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.grey.shade200,
+                            blurRadius: 10,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: fields,
+                      ),
+                    ),
                   ],
                 ),
               );
             }
 
             return SingleChildScrollView(
-              // FIX: Se elimina 'const' para permitir la expresión condicional
               padding: EdgeInsets.all(isWide ? 32 : 16), 
               child: Center(
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 980),
-                  child: Card(
-                    elevation: 8, // Más elevación para un efecto 3D
-                    shadowColor: _primaryColor.withOpacity(0.2),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)), // Más redondeado
-                    child: Padding(
-                      padding: const EdgeInsets.all(30),
-                      child: Column(
-                        children: [
-                          // 1. Origen y Destino (Route Info)
-                          buildSection(
-                            title: 'Información de Ruta', // FIX: Usar String literal
-                            icon: Icons.alt_route, // FIX: Ícono válido
-                            fields: [
-                              isWide
-                                  ? Row(
-                                      children: [
-                                        // FIX: Íconos válidos
-                                        Expanded(child: TextFormField(controller: _origin, decoration: _inputDeco(AppStrings.origin, Icons.map_outlined), validator: _req)),
-                                        const SizedBox(width: 16),
-                                        Expanded(child: TextFormField(controller: _destination, decoration: _inputDeco(AppStrings.destination, Icons.location_on_outlined), validator: _req)),
-                                      ],
-                                    )
-                                  : Column(
-                                      children: [
-                                        // FIX: Íconos válidos
-                                        TextFormField(controller: _origin, decoration: _inputDeco(AppStrings.origin, Icons.map_outlined), validator: _req),
-                                        const SizedBox(height: 16),
-                                        TextFormField(controller: _destination, decoration: _inputDeco(AppStrings.destination, Icons.location_on_outlined), validator: _req),
-                                      ],
-                                    ),
-                            ],
-                          ),
-                          
-                          // 2. Tiempos (Schedule)
-                          buildSection(
-                            title: 'Horario', // FIX: Usar String literal
-                            icon: Icons.schedule,
-                            fields: [
-                              isWide
-                                  ? Row(
-                                      children: [
-                                        Expanded(child: _buildDateTimePicker(isDeparture: true)),
-                                        const SizedBox(width: 16),
-                                        Expanded(child: _buildDateTimePicker(isDeparture: false)),
-                                      ],
-                                    )
-                                  : Column(
-                                      children: [
-                                        _buildDateTimePicker(isDeparture: true),
-                                        const SizedBox(height: 16),
-                                        _buildDateTimePicker(isDeparture: false),
-                                      ],
-                                    ),
-                            ],
-                          ),
+                  child: Column( // Eliminamos el Card exterior y usamos secciones internas con Cards
+                    children: [
+                      // 1. Origen y Destino (Route Info)
+                      buildSection(
+                        title: 'Ruta del Viaje',
+                        icon: Icons.alt_route,
+                        fields: [
+                          isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(child: TextFormField(controller: _origin, decoration: _inputDeco(AppStrings.origin, Icons.map_outlined), validator: _req)),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: TextFormField(controller: _destination, decoration: _inputDeco(AppStrings.destination, Icons.location_on_outlined), validator: _req)),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    TextFormField(controller: _origin, decoration: _inputDeco(AppStrings.origin, Icons.map_outlined), validator: _req),
+                                    const SizedBox(height: 16),
+                                    TextFormField(controller: _destination, decoration: _inputDeco(AppStrings.destination, Icons.location_on_outlined), validator: _req),
+                                  ],
+                                ),
+                        ],
+                      ),
+                      
+                      // 2. Tiempos (Schedule)
+                      buildSection(
+                        title: 'Horario',
+                        icon: Icons.schedule,
+                        fields: [
+                          isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(child: _buildDateTimePicker(isDeparture: true)),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: _buildDateTimePicker(isDeparture: false)),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    _buildDateTimePicker(isDeparture: true),
+                                    const SizedBox(height: 16),
+                                    _buildDateTimePicker(isDeparture: false),
+                                  ],
+                                ),
+                        ],
+                      ),
 
-                          // 3. Precios y Asientos (Capacity and Price)
-                          buildSection(
-                            title: 'Capacidad y Precio', // FIX: Usar String literal
-                            icon: Icons.attach_money_rounded,
-                            fields: [
-                              isWide
-                                  ? Row(
-                                      children: [
-                                        Expanded(child: TextFormField(controller: _price, decoration: _inputDeco(AppStrings.price, Icons.paid_outlined), keyboardType: TextInputType.number, validator: _validateDouble)),
-                                        const SizedBox(width: 16),
-                                        Expanded(child: TextFormField(controller: _availableSeats, decoration: _inputDeco(AppStrings.availableSeats, Icons.event_seat_outlined), keyboardType: TextInputType.number, validator: _validateInt)),
-                                        const SizedBox(width: 16),
-                                        Expanded(child: TextFormField(controller: _totalSeats, decoration: _inputDeco(AppStrings.totalSeats, Icons.group_outlined), keyboardType: TextInputType.number, validator: _validateInt)),
-                                      ],
-                                    )
-                                  : Column(
-                                      children: [
-                                        TextFormField(controller: _price, decoration: _inputDeco(AppStrings.price, Icons.paid_outlined), keyboardType: TextInputType.number, validator: _validateDouble),
-                                        const SizedBox(height: 16),
-                                        TextFormField(controller: _availableSeats, decoration: _inputDeco(AppStrings.availableSeats, Icons.event_seat_outlined), keyboardType: TextInputType.number, validator: _validateInt),
-                                        const SizedBox(height: 16),
-                                        TextFormField(controller: _totalSeats, decoration: _inputDeco(AppStrings.totalSeats, Icons.group_outlined), keyboardType: TextInputType.number, validator: _validateInt),
-                                      ],
-                                    ),
-                            ],
-                          ),
+                      // 3. Precios y Asientos (Capacity and Price)
+                      buildSection(
+                        title: 'Capacidad y Tarifa',
+                        icon: Icons.attach_money_rounded,
+                        fields: [
+                          isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(child: TextFormField(controller: _price, decoration: _inputDeco(AppStrings.price, Icons.paid_outlined).copyWith(prefixText: '\$'), keyboardType: TextInputType.number, validator: _validateDouble)),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: TextFormField(controller: _availableSeats, decoration: _inputDeco(AppStrings.availableSeats, Icons.event_seat_outlined), keyboardType: TextInputType.number, validator: _validateInt)),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: TextFormField(controller: _totalSeats, decoration: _inputDeco(AppStrings.totalSeats, Icons.group_outlined), keyboardType: TextInputType.number, validator: _validateInt)),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    TextFormField(controller: _price, decoration: _inputDeco(AppStrings.price, Icons.paid_outlined).copyWith(prefixText: '\$'), keyboardType: TextInputType.number, validator: _validateDouble),
+                                    const SizedBox(height: 16),
+                                    TextFormField(controller: _availableSeats, decoration: _inputDeco(AppStrings.availableSeats, Icons.event_seat_outlined), keyboardType: TextInputType.number, validator: _validateInt),
+                                    const SizedBox(height: 16),
+                                    TextFormField(controller: _totalSeats, decoration: _inputDeco(AppStrings.totalSeats, Icons.group_outlined), keyboardType: TextInputType.number, validator: _validateInt),
+                                  ],
+                                ),
+                        ],
+                      ),
 
-                          // 4. Vehículo
-                          buildSection(
-                            title: AppStrings.vehicle,
-                            icon: Icons.directions_bus_outlined,
-                            fields: [
-                              isWide
-                                  ? Row(
-                                      children: [
-                                        Expanded(child: TextFormField(controller: _vehicleType, decoration: _inputDeco(AppStrings.vehicleType, Icons.style_outlined))),
-                                        const SizedBox(width: 16),
-                                        Expanded(child: TextFormField(controller: _vehicleId, decoration: _inputDeco(AppStrings.vehicleId, Icons.badge_outlined), keyboardType: TextInputType.text)),
-                                      ],
-                                    )
-                                  : Column(
-                                      children: [
-                                        TextFormField(controller: _vehicleType, decoration: _inputDeco(AppStrings.vehicleType, Icons.style_outlined)),
-                                        const SizedBox(height: 16),
-                                        TextFormField(controller: _vehicleId, decoration: _inputDeco(AppStrings.vehicleId, Icons.badge_outlined), keyboardType: TextInputType.text),
-                                      ],
-                                    ),
+                      // 4. Vehículo y Conductor
+                      buildSection(
+                        title: 'Asignación de Unidad',
+                        icon: Icons.directions_bus_outlined,
+                        fields: [
+                          isWide
+                              ? Row(
+                                  children: [
+                                    Expanded(child: TextFormField(controller: _vehicleType, decoration: _inputDeco(AppStrings.vehicleType, Icons.style_outlined))),
+                                    const SizedBox(width: 16),
+                                    Expanded(child: TextFormField(controller: _vehicleId, decoration: _inputDeco(AppStrings.vehicleId, Icons.badge_outlined), keyboardType: TextInputType.text)),
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    TextFormField(controller: _vehicleType, decoration: _inputDeco(AppStrings.vehicleType, Icons.style_outlined)),
+                                    const SizedBox(height: 16),
+                                    TextFormField(controller: _vehicleId, decoration: _inputDeco(AppStrings.vehicleId, Icons.badge_outlined), keyboardType: TextInputType.text),
+                                  ],
+                                ),
+                          const SizedBox(height: 16),
+                          DropdownButtonFormField<String>(
+                            decoration: _inputDeco(AppStrings.assignDriver, Icons.person_outline),
+                            value: _assignedDriverId,
+                            items: [
+                              const DropdownMenuItem(value: null, child: Text('No Assigned Driver', style: TextStyle(color: Colors.grey))),
+                              ...ref.watch(companyControllerProvider).drivers.map((d) => DropdownMenuItem(
+                                value: d.id,
+                                child: Text(d.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                              )).toList(),
                             ],
+                            onChanged: (v) => setState(() => _assignedDriverId = v),
+                            isExpanded: true,
+                            menuMaxHeight: 300,
                           ),
+                        ],
+                      ),
 
-                          // 5. Info Adicional y Estado (Settings)
-                          buildSection(
-                            title: 'Configuración', // FIX: Usar String literal
-                            icon: Icons.tune,
-                            fields: [
-                              DropdownButtonFormField<String>(
-                                decoration: _inputDeco(AppStrings.assignDriver, Icons.person_outline),
-                                value: _assignedDriverId,
-                                items: ref.watch(companyControllerProvider).drivers.map((d) => DropdownMenuItem(
-                                      value: d.id,
-                                      child: Text(d.name),
-                                    )).toList(),
-                                onChanged: (v) => setState(() => _assignedDriverId = v),
-                                isExpanded: true,
-                                menuMaxHeight: 300,
-                              ),
-                              const SizedBox(height: 16),
-                              TextFormField(
-                                controller: _additionalInfo,
-                                decoration: _inputDeco(AppStrings.additionalInfo, Icons.info_outline)
-                                    .copyWith(hintText: 'Ej. {"paradas": ["cali", "armenia"]}'),
-                                maxLines: 3,
-                                validator: _validateJson,
-                              ),
-                              const SizedBox(height: 16),
-                              SwitchListTile(
-                                title: const Text(AppStrings.active, style: TextStyle(fontWeight: FontWeight.w500)),
-                                subtitle: Text(_isActive ? 'Programación activa y visible.' : 'Programación inactiva y oculta.'),
-                                value: _isActive,
-                                onChanged: (v) => setState(() => _isActive = v),
-                                activeColor: _secondaryColor,
-                                tileColor: Colors.grey.shade50,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                              ),
-                            ],
+                      // 5. Info Adicional y Estado (Settings)
+                      buildSection(
+                        title: 'Configuración Adicional',
+                        icon: Icons.tune,
+                        fields: [
+                          TextFormField(
+                            controller: _additionalInfo,
+                            decoration: _inputDeco(AppStrings.additionalInfo, Icons.info_outline)
+                                .copyWith(hintText: 'Ej. {"paradas": ["cali", "armenia"]}', alignLabelWithHint: true),
+                            maxLines: 5,
+                            minLines: 3,
+                            validator: _validateJson,
+                            keyboardType: TextInputType.multiline,
+                            style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                           ),
-                          
                           const SizedBox(height: 20),
-                          ElevatedButton.icon(
-                            onPressed: _save,
-                            icon: const Icon(Icons.check_circle_outline, size: 24),
-                            label: const Text('GUARDAR CAMBIOS', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _secondaryColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              elevation: 4,
+                          // Diseño de SwitchListTile mejorado
+                          Container(
+                            decoration: BoxDecoration(
+                              color: _isActive ? _secondaryColor.withOpacity(0.1) : Colors.grey.shade100,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: _isActive ? _secondaryColor : Colors.grey.shade300),
+                            ),
+                            child: SwitchListTile(
+                              title: const Text(AppStrings.active, style: TextStyle(fontWeight: FontWeight.w700)),
+                              subtitle: Text(_isActive ? 'Programación activa y visible para pasajeros.' : 'Programación inactiva y oculta.'),
+                              value: _isActive,
+                              onChanged: (v) => setState(() => _isActive = v),
+                              activeColor: _secondaryColor,
+                              tileColor: Colors.transparent,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10),
                             ),
                           ),
                         ],
                       ),
-                    ),
+                      
+                      const SizedBox(height: 30),
+                      ElevatedButton.icon(
+                        onPressed: _save,
+                        icon: const Icon(Icons.check_circle_outline, size: 24),
+                        label: const Text('GUARDAR CAMBIOS', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _secondaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 6,
+                          minimumSize: Size(isWide ? 400 : double.infinity, 50),
+                        ),
+                      ),
+                      const SizedBox(height: 50),
+                    ],
                   ),
                 ),
               ),
@@ -407,26 +447,41 @@ class _CompanyEditTripScreenState extends ConsumerState<CompanyEditTripScreen> {
   // --- Widgets Helpers ---
   Widget _buildDateTimePicker({required bool isDeparture}) {
     final label = isDeparture ? AppStrings.departureTimeIso : AppStrings.arrivalTimeIso;
-    // FIX: Íconos válidos
     final icon = isDeparture ? Icons.departure_board : Icons.access_time_filled;
     final controller = isDeparture ? _departure : _arrival;
     
+    // Formatear el texto para la visualización (si es una fecha ISO válida)
+    String displayTime = controller.text.isNotEmpty
+        ? _formatIsoToDateTime(controller.text)
+        : '';
+
     return TextFormField(
-      controller: controller,
+      controller: TextEditingController(text: displayTime), // Usar controller temporal para la visualización
       readOnly: true,
       decoration: _inputDeco(label, icon).copyWith(
         suffixIcon: IconButton(
-          icon: const Icon(Icons.calendar_today, color: _primaryColor),
+          icon: const Icon(Icons.calendar_month, color: _primaryColor),
           onPressed: () => _pickDateTime(isDeparture: isDeparture),
           tooltip: AppStrings.pickDate,
         ),
       ),
       validator: _req,
+      style: const TextStyle(fontWeight: FontWeight.w500),
     );
   }
 
+  // --- Helper para Formato (Diseño) ---
+  String _formatIsoToDateTime(String isoString) {
+    try {
+      final dateTime = DateTime.parse(isoString).toLocal();
+      return DateFormat('dd MMM yyyy HH:mm').format(dateTime);
+    } catch (_) {
+      return isoString; // Retorna el ISO si falla el parseo
+    }
+  }
 
-  // --- Validation Helpers ---
+
+  // --- Validation Helpers (Lógica INTACTA) ---
   String? _req(String? v) => (v == null || v.trim().isEmpty) ? AppStrings.required : null;
   
   String? _validateInt(String? v) {

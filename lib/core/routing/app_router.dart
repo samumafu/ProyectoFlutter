@@ -143,7 +143,7 @@ class _AuthGateState extends ConsumerState<_AuthGate> {
 }
 
 // ----------------------------------------------------------------------
-// IMPROVED SECTION: _LoginScreen and _LoginScreenState (DESIGN ONLY)
+// SECCIÓN MEJORADA: _LoginScreen y _LoginScreenState (DISEÑO Y RESPONSIVE)
 // ----------------------------------------------------------------------
 
 class _LoginScreen extends ConsumerStatefulWidget {
@@ -154,17 +154,17 @@ class _LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<_LoginScreen> with SingleTickerProviderStateMixin {
   // Design Colors
-  static const Color _primaryColor = Color(0xFF1E88E5); // Corporate Blue
-  static const Color _secondaryColor = Color(0xFF00C853); // Green for Passenger
-  static const Color _driverColor = Color(0xFFFFA000); // Orange for Driver
+  static const Color _primaryColor = Color(0xFF1E88E5); // Azul Corporativo (más saturado)
+  static const Color _secondaryColor = Color(0xFF00C853); // Verde para Pasajero
+  static const Color _driverColor = Color(0xFFFFA000); // Naranja para Conductor
 
-  // Controllers and State (LOGIC INTACT)
+  // Controllers and State (LÓGICA INTACTA)
   final TextEditingController _emailCtrl = TextEditingController();
   final TextEditingController _passwordCtrl = TextEditingController();
   bool _isLoading = false;
   String? _error;
 
-  // For animations
+  // Para animaciones de entrada
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -182,18 +182,18 @@ class _LoginScreenState extends ConsumerState<_LoginScreen> with SingleTickerPro
     _slideAnimation = Tween<Offset>(begin: const Offset(0, 0.2), end: Offset.zero).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
     );
-    _animationController.forward();
+    _animationController.forward(); // Inicia la animación al cargar la pantalla
   }
 
   @override
   void dispose() {
     _emailCtrl.dispose();
     _passwordCtrl.dispose();
-    _animationController.dispose(); // Important to release resources
+    _animationController.dispose(); // Liberar recursos
     super.dispose();
   }
 
-  // --- Business Logic (Functionality 100% INTACT) ---
+  // --- Lógica de Negocio (Funcionalidad 100% INTACTA) ---
 
   Future<void> _signIn() async {
     final email = _emailCtrl.text.trim();
@@ -250,7 +250,7 @@ class _LoginScreenState extends ConsumerState<_LoginScreen> with SingleTickerPro
     }
   }
   
-  // Function to register driver (Extracted from previous inline logic)
+  // Función para registrar conductor
   Future<void> _signUpDriver() async {
     final email = _emailCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
@@ -270,219 +270,245 @@ class _LoginScreenState extends ConsumerState<_LoginScreen> with SingleTickerPro
     }
   }
 
-  // Helper for input design (VISUAL IMPROVEMENT)
+  // Helper para el diseño de inputs (MEJORA VISUAL)
   InputDecoration _inputDeco(String label, IconData icon) => InputDecoration(
     labelText: label,
+    // Estilo de label flotante mejorado
+    labelStyle: const TextStyle(color: _primaryColor),
     prefixIcon: Icon(icon, color: _primaryColor),
     filled: true,
     fillColor: Colors.white,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)), 
+    // Borde más suave
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(16), 
+      borderSide: BorderSide.none, // Elimina el borde por defecto para usar la sombra del Card
+    ), 
     enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: Colors.grey.shade300),
+      borderRadius: BorderRadius.circular(16),
+      borderSide: BorderSide(color: Colors.grey.shade200, width: 1.5),
     ),
     focusedBorder: const OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(12)), 
-      borderSide: BorderSide(color: _primaryColor, width: 2),
+      borderRadius: BorderRadius.all(Radius.circular(16)), 
+      borderSide: BorderSide(color: _primaryColor, width: 2.5),
     ),
+    // Padding de contenido (opcional, para campos grandes)
+    contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
   );
 
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // CRUCIAL FIX: Set background to transparent so the Container takes full control
+      // CRUCIAL: Fondo transparente para que el Container controle el color
       backgroundColor: Colors.transparent, 
-      body: Container( // Use Container for the background gradient
-        constraints: BoxConstraints.expand(height: MediaQuery.of(context).size.height), // Ensure full screen height
+      body: Container( // Usar Container para el fondo con gradiente
+        constraints: BoxConstraints.expand(height: MediaQuery.of(context).size.height), // Asegura altura de pantalla completa
         decoration: BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+            begin: Alignment.topCenter, // Inicia desde arriba
+            end: Alignment.bottomCenter, // Termina abajo
             colors: [
-              _primaryColor.withOpacity(0.9), // Dark Blue (top)
-              _primaryColor.withOpacity(0.6), // Light Blue
-              Colors.white, // White/Light Gray (bottom)
+              _primaryColor.withOpacity(1.0), // Azul principal (arriba)
+              _primaryColor.withOpacity(0.8), 
+              const Color(0xFFF0F4F8), // Fondo de color claro para el card
             ],
-            // Controls the gradient distribution: pushing blue higher up the screen
-            stops: const [0.0, 0.45, 1.0], 
+            // Controla la distribución, el fondo claro empieza más o menos a la mitad
+            stops: const [0.0, 0.4, 1.0], 
           ),
         ),
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // The layout is narrow if width is less than 600px (VISUAL IMPROVEMENT)
+              // Determina si el ancho es estrecho (móvil)
               final isNarrow = constraints.maxWidth < 600; 
-              return FadeTransition( // Fade animation
+              return FadeTransition( // Animación de aparición
                 opacity: _fadeAnimation,
-                child: SlideTransition( // Slide animation
+                child: SlideTransition( // Animación de deslizamiento
                   position: _slideAnimation,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: Center(
+                  child: Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 500), // Controlled maximum width (VISUAL IMPROVEMENT)
-                        child: Card(
-                          elevation: 12, // More shadow
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), 
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                // Large Bus Icon (VISUAL IMPROVEMENT)
-                                Icon(
-                                  Icons.directions_bus_filled, // A filled bus icon looks good
-                                  size: 80,
-                                  color: _primaryColor.withOpacity(0.8),
-                                ),
-                                const SizedBox(height: 10),
-
-                                // Improved Titles (VISUAL IMPROVEMENT)
-                                Text(
-                                  AppStrings.appTitle, 
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 34, // Larger size
-                                    fontWeight: FontWeight.w900,
-                                    color: _primaryColor.withOpacity(0.9),
-                                    letterSpacing: 1.5,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Your journey starts here', // More welcoming message
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w400,
-                                    color: Colors.black54,
-                                  ),
-                                ),
-                                const SizedBox(height: 30),
-                                
-                                // --- TEXT FIELDS ---
-                                TextField(
-                                  controller: _emailCtrl,
-                                  keyboardType: TextInputType.emailAddress,
-                                  textInputAction: TextInputAction.next,
-                                  decoration: _inputDeco(AppStrings.email, Icons.email_outlined), // Improved design
-                                ),
-                                const SizedBox(height: 16),
-                                TextField(
-                                  controller: _passwordCtrl,
-                                  textInputAction: TextInputAction.done,
-                                  decoration: _inputDeco(AppStrings.password, Icons.lock_outline), // Improved design
-                                  obscureText: true,
-                                ),
-                                
-                                const SizedBox(height: 20),
-                                
-                                // --- ERROR MESSAGE ---
-                                if (_error != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: Text(
-                                      _error!, 
-                                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ),
-                                
-                                // --- MAIN SIGN IN BUTTON ---
-                                ElevatedButton(
-                                  onPressed: _isLoading ? null : _signIn,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: _primaryColor,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 16),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                    textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                    elevation: 5, // Shadow for the button
-                                  ),
-                                  child: _isLoading 
-                                      ? const SizedBox(
-                                          height: 20, width: 20, 
-                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
-                                        ) 
-                                      : const Text(AppStrings.signIn),
-                                ),
-                                
-                                const SizedBox(height: 25),
-                                // Subtler divider
-                                const Divider(height: 1, thickness: 0.8, color: Colors.grey), 
-                                const SizedBox(height: 15),
-
-                                const Text(
-                                  "Don't have an account? Register as:",
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(color: Colors.black54, fontSize: 16),
-                                ),
-                                const SizedBox(height: 15),
-
-                                // --- REGISTRATION BUTTONS (ADAPTIVE) ---
-                                isNarrow 
-                                    ? Column(
-                                        children: [
-                                          OutlinedButton.icon(
-                                            onPressed: _isLoading ? null : _signUpPassenger,
-                                            icon: const Icon(Icons.person_outline),
-                                            label: const Text(AppStrings.registerAsPassenger),
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: _secondaryColor,
-                                              side: const BorderSide(color: _secondaryColor, width: 2), // Thicker border
-                                              padding: const EdgeInsets.symmetric(vertical: 14),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 12),
-                                          OutlinedButton.icon(
-                                            onPressed: _isLoading ? null : _signUpDriver, 
-                                            icon: const Icon(Icons.drive_eta_outlined),
-                                            label: const Text(AppStrings.registerAsDriver),
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor: _driverColor,
-                                              side: const BorderSide(color: _driverColor, width: 2), // Thicker border
-                                              padding: const EdgeInsets.symmetric(vertical: 14),
-                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                            ),
-                                          ),
-                                        ],
-                                      )
-                                    : Row(
-                                        children: [
-                                          Expanded(
-                                            child: OutlinedButton.icon(
-                                              onPressed: _isLoading ? null : _signUpPassenger,
-                                              icon: const Icon(Icons.person_outline),
-                                              label: const Text(AppStrings.registerAsPassenger),
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor: _secondaryColor,
-                                                side: const BorderSide(color: _secondaryColor, width: 2),
-                                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: OutlinedButton.icon(
-                                              onPressed: _isLoading ? null : _signUpDriver, 
-                                              icon: const Icon(Icons.drive_eta_outlined),
-                                              label: const Text(AppStrings.registerAsDriver),
-                                              style: OutlinedButton.styleFrom(
-                                                foregroundColor: _driverColor,
-                                                side: const BorderSide(color: _driverColor, width: 2),
-                                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                              ],
+                        constraints: const BoxConstraints(maxWidth: 450), // Ancho máximo ligeramente más estrecho para móvil (RESPONSIVE)
+                        child: Column( // Envuelve el Card y el posible branding
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // Header/Branding fuera del Card
+                            Icon(
+                              Icons.directions_bus_filled, 
+                              size: isNarrow ? 90 : 110,
+                              color: Colors.white,
                             ),
-                          ),
+                            const SizedBox(height: 5),
+                            Text(
+                              AppStrings.appTitle, 
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                fontSize: 38, 
+                                fontWeight: FontWeight.w900,
+                                color: Colors.white,
+                                letterSpacing: 2,
+                                shadows: [
+                                  Shadow(
+                                    blurRadius: 5.0,
+                                    color: Colors.black26,
+                                    offset: Offset(0, 2),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 30),
+
+                            // --- CARD DE LOGIN ---
+                            Card(
+                              elevation: 20, // Mayor sombra para un efecto flotante
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(30), // Bordes más redondeados
+                              ), 
+                              child: Padding(
+                                padding: const EdgeInsets.all(30), // Más padding dentro del Card
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    
+                                    // Título del Formulario
+                                    Text(
+                                      'Welcome Back', 
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 26, 
+                                        fontWeight: FontWeight.bold,
+                                        color: _primaryColor,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 5),
+                                    const Text(
+                                      'Sign in to continue your journey', 
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w400,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 30),
+                                    
+                                    // --- TEXT FIELDS ---
+                                    TextField(
+                                      controller: _emailCtrl,
+                                      keyboardType: TextInputType.emailAddress,
+                                      textInputAction: TextInputAction.next,
+                                      decoration: _inputDeco(AppStrings.email, Icons.email_outlined), // Diseño mejorado
+                                    ),
+                                    const SizedBox(height: 20),
+                                    TextField(
+                                      controller: _passwordCtrl,
+                                      textInputAction: TextInputAction.done,
+                                      decoration: _inputDeco(AppStrings.password, Icons.lock_outline), // Diseño mejorado
+                                      obscureText: true,
+                                    ),
+                                    
+                                    const SizedBox(height: 25),
+                                    
+                                    // --- ERROR MESSAGE ---
+                                    if (_error != null)
+                                      Padding(
+                                        padding: const EdgeInsets.only(bottom: 15),
+                                        child: Text(
+                                          _error!, 
+                                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      ),
+                                    
+                                    // --- MAIN SIGN IN BUTTON ---
+                                    ElevatedButton(
+                                      onPressed: _isLoading ? null : _signIn,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: _primaryColor,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(vertical: 18),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                                        textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                        elevation: 8, // Sombra prominente
+                                      ),
+                                      child: _isLoading 
+                                          ? const SizedBox(
+                                              height: 20, width: 20, 
+                                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3)
+                                            ) 
+                                          : const Text(AppStrings.signIn),
+                                    ),
+                                    
+                                    const SizedBox(height: 30),
+                                    // Divisor más estilizado
+                                    Row(
+                                      children: [
+                                        const Expanded(child: Divider(thickness: 1, color: Colors.grey)),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          child: Text(
+                                            "OR",
+                                            style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                                          ),
+                                        ),
+                                        const Expanded(child: Divider(thickness: 1, color: Colors.grey)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 20),
+
+                                    const Text(
+                                      "Don't have an account? Register as:",
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.black54, fontSize: 16),
+                                    ),
+                                    const SizedBox(height: 15),
+
+                                    // --- BOTONES DE REGISTRO (ADAPTIVE Y MEJORADOS) ---
+                                    isNarrow 
+                                        ? Column( // Uso de Column en pantallas estrechas
+                                            children: [
+                                              _buildRegisterButton(
+                                                onPressed: _isLoading ? null : _signUpPassenger,
+                                                icon: Icons.person_outline,
+                                                label: AppStrings.registerAsPassenger,
+                                                color: _secondaryColor,
+                                              ),
+                                              const SizedBox(height: 12),
+                                              _buildRegisterButton(
+                                                onPressed: _isLoading ? null : _signUpDriver,
+                                                icon: Icons.drive_eta_outlined,
+                                                label: AppStrings.registerAsDriver,
+                                                color: _driverColor,
+                                              ),
+                                            ],
+                                          )
+                                        : Row( // Uso de Row en pantallas anchas
+                                            children: [
+                                              Expanded(
+                                                child: _buildRegisterButton(
+                                                  onPressed: _isLoading ? null : _signUpPassenger,
+                                                  icon: Icons.person_outline,
+                                                  label: AppStrings.registerAsPassenger,
+                                                  color: _secondaryColor,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: _buildRegisterButton(
+                                                  onPressed: _isLoading ? null : _signUpDriver,
+                                                  icon: Icons.drive_eta_outlined,
+                                                  label: AppStrings.registerAsDriver,
+                                                  color: _driverColor,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -492,6 +518,33 @@ class _LoginScreenState extends ConsumerState<_LoginScreen> with SingleTickerPro
             },
           ),
         ),
+      ),
+    );
+  }
+
+  // --- NUEVO WIDGET HELPER PARA BOTÓN DE REGISTRO RESPONSIVE ---
+  Widget _buildRegisterButton({
+    required VoidCallback? onPressed,
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: FittedBox( // <--- CLAVE PARA HACER EL TEXTO RESPONSIVE
+        fit: BoxFit.scaleDown,
+        child: Text(
+          label,
+          // Un poco más pequeña la fuente para dar margen en pantallas estrechas
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15), 
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: color,
+        side: BorderSide(color: color, width: 2), 
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8), // Más padding horizontal para que no se pegue el texto
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       ),
     );
   }
