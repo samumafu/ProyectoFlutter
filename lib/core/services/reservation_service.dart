@@ -30,12 +30,12 @@ class ReservationService {
   }
 
   // ---------------------------------------------------
-  // 3. Obtener emails por IDs de pasajeros (corregido)
+  // 3. Obtener emails por IDs de pasajeros (RESUELTO)
   // ---------------------------------------------------
   Future<Map<String, String>> getPassengerEmailsByIds(List<String> passengerIds) async {
     if (passengerIds.isEmpty) return {};
 
-    // ⬅️ Resolución de conflicto: Usar comillas para el filtro 'in' en PostgreSQL
+    // Resolución: Usar comillas simples para que el filtro 'in' funcione correctamente con UUIDs/strings en Supabase.
     final idsList = passengerIds.map((e) => "'$e'").join(',');
 
     final pasajeros = await client
@@ -57,7 +57,7 @@ class ReservationService {
 
     if (userIds.isEmpty) return {};
     
-    // ⬅️ Resolución de conflicto: Usar comillas para el filtro 'in' en PostgreSQL
+    // Resolución: Usar comillas simples para los userIds también.
     final uIdsList = userIds.map((e) => "'$e'").join(',');
 
     final users = await client
