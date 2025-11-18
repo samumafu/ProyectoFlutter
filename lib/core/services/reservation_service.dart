@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
-import 'package:tu_flota/features/passenger/models/reservation_model.dart'; 
+import 'package:tu_flota/features/passenger/models/reservation_model.dart';
 import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart'; // NECESARIO
 
 // ---------------------------------------------------
@@ -35,7 +35,8 @@ class ReservationService {
   Future<Map<String, String>> getPassengerEmailsByIds(List<String> passengerIds) async {
     if (passengerIds.isEmpty) return {};
 
-    // Resolución: Usar comillas simples para que el filtro 'in' funcione correctamente con UUIDs/strings en Supabase.
+    // RESOLUCIÓN DE CONFLICTO (FEATURED-DESIGN WINS):
+    // Se usan comillas simples ('$e') para que el filtro 'in' funcione correctamente con UUIDs/strings en Supabase.
     final idsList = passengerIds.map((e) => "'$e'").join(',');
 
     final pasajeros = await client
@@ -57,7 +58,8 @@ class ReservationService {
 
     if (userIds.isEmpty) return {};
     
-    // Resolución: Usar comillas simples para los userIds también.
+    // RESOLUCIÓN DE CONFLICTO (FEATURED-DESIGN WINS):
+    // Se usan comillas simples para los userIds también por la misma razón.
     final uIdsList = userIds.map((e) => "'$e'").join(',');
 
     final users = await client
