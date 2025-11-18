@@ -9,13 +9,10 @@ import 'package:tu_flota/core/services/reservation_service.dart';
 import 'package:tu_flota/features/driver/models/driver_model.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 import 'package:tu_flota/features/passenger/models/reservation_model.dart';
-import 'package:tu_flota/core/services/chat_service.dart';
+import 'package:tu_flota/core/services/chat_service.dart'; // ⬅️ Dejé una sola importación
 import 'package:tu_flota/features/company/models/chat_message_model.dart';
 import 'package:tu_flota/core/constants/route_coordinates.dart';
-import 'package:latlong2/latlong.dart';
-import 'package:tu_flota/core/services/chat_service.dart';
-import 'package:tu_flota/core/constants/route_coordinates.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart'; // ⬅️ Dejé una sola importación
 
 class DriverDashboardScreen extends ConsumerStatefulWidget {
   const DriverDashboardScreen({super.key});
@@ -88,6 +85,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
     int seats = 0;
     for (final sid in finishedIds) {
       final res = await ReservationService(client).listReservationsForSchedule(sid);
+      // 'res' es List<Reservation>, no se necesita mapeo aquí.
       seats += res.fold<int>(0, (p, r) => p + r.seatsReserved);
     }
     if (mounted) {
@@ -187,7 +185,14 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
 
   Future<void> _loadPassengers(String scheduleId) async {
     final client = ref.read(supabaseProvider);
-    final res = await ReservationService(client).listReservationsForSchedule(scheduleId);
+    
+    // 🟢 CORRECCIÓN CLAVE DE MAPEADO
+    // Llama al servicio y asegura que el resultado sea List<Reservation> para evitar errores de compilación
+    final data = await ReservationService(client).listReservationsForSchedule(scheduleId);
+    final res = (data as List<dynamic>)
+        .map((e) => Reservation.fromMap(e as Map<String, dynamic>))
+        .toList();
+    
     if (mounted) {
       setState(() {
         _resBySchedule[scheduleId] = res;

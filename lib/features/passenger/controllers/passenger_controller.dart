@@ -11,11 +11,10 @@ import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart'
 import 'package:tu_flota/core/data/narino_municipalities.dart'; 
 
 // --------------------------------------------------------------------------
-// 1. ESTADO CORREGIDO: Acepta ReservationHistory para el historial
+// 1. ESTADO 
 // --------------------------------------------------------------------------
 class PassengerState {
   final List<CompanySchedule> trips;
-  // 🛑 CAMBIO CLAVE: Cambiado de List<Reservation> a List<ReservationHistory>
   final List<ReservationHistory> myReservations;
   final bool isLoading;
   final String? error;
@@ -23,7 +22,6 @@ class PassengerState {
 
   const PassengerState({
     this.trips = const [],
-    // Inicialización con el nuevo tipo
     this.myReservations = const [],
     this.isLoading = false,
     this.error,
@@ -32,7 +30,6 @@ class PassengerState {
 
   PassengerState copyWith({
     List<CompanySchedule>? trips,
-    // 🛑 CAMBIO CLAVE: El copyWith acepta la lista de historial
     List<ReservationHistory>? myReservations,
     bool? isLoading,
     String? error,
@@ -49,7 +46,7 @@ class PassengerState {
 }
 
 // --------------------------------------------------------------------------
-// 2. CONTROLLER CORREGIDO
+// 2. CONTROLLER CORREGIDO (SOLUCIÓN AL HISTORIAL)
 // --------------------------------------------------------------------------
 class PassengerController extends StateNotifier<PassengerState> {
   final Ref ref;
@@ -156,11 +153,8 @@ class PassengerController extends StateNotifier<PassengerState> {
           .toList();
       state = state.copyWith(trips: updatedTrips);
       
-      // ⚠️ ADVERTENCIA: Esta línea fue la que generó el TypeError antes. 
-      // La dejamos así por ahora, pero lo ideal sería no actualizar el estado aquí, 
-      // sino recargar el historial después. Si falla, coméntala.
-      // final my = List<Reservation>.from(state.myReservations)..add(res);
-      // state = state.copyWith(myReservations: my);
+      // 🟢 CORRECCIÓN CLAVE: ¡Recargar el historial para que la nueva reserva aparezca!
+      await loadMyReservations();
       
       return res;
     } catch (e) {
@@ -175,11 +169,9 @@ class PassengerController extends StateNotifier<PassengerState> {
       if (userId == null) return;
       final passengerId = await _ensurePassengerId(userId);
       
-      // 🛑 CORRECCIÓN DE TIPO (Aunque el servicio necesita ser corregido en el otro archivo)
-      // Se asume que el servicio devolverá List<ReservationHistory>
       final list = await _reservationService.listReservationsByPassenger(passengerId);
       
-      // Ahora el estado acepta List<ReservationHistory>
+      // Se asume que list es List<ReservationHistory>
       state = state.copyWith(myReservations: list as List<ReservationHistory>); 
     } catch (e) {
       state = state.copyWith(error: e.toString());
@@ -214,7 +206,6 @@ class PassengerController extends StateNotifier<PassengerState> {
       // 2. Actualizar la lista local (List<ReservationHistory>):
       final updatedList = state.myReservations.map<ReservationHistory>((r) {
         if (r.id == reservationId) {
-            // 🛑 CORRECCIÓN DEL ERROR: Usa copyWith de ReservationHistory para actualizar el status.
             return r.copyWith(status: 'cancelled'); 
         }
         return r;

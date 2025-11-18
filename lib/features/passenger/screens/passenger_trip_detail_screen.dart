@@ -12,13 +12,20 @@ import 'package:tu_flota/core/services/chat_service.dart';
 import 'package:tu_flota/features/company/models/chat_message_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Definiciones de estilo
+// Style Definitions
 const Color _primaryColor = Color(0xFF1E88E5);
 const Color _accentColor = Color(0xFF00C853);
 const Color _reservedColor = Color(0xFFC62828);
 const Color _selectedColor = Color(0xFF43A047);
-const Color _warningColor = Color(0xFFF9A825); 
+const Color _warningColor = Color(0xFFF9A825);
 const Color _availableColor = Color(0xFFE3F2FD);
+
+// Data structure for top destinations
+class TopDestination {
+  final String city;
+  final String imageUrl;
+  TopDestination(this.city, this.imageUrl);
+}
 
 class PassengerTripDetailScreen extends ConsumerStatefulWidget {
   final Object? schedule;
@@ -29,19 +36,29 @@ class PassengerTripDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailScreen> {
-  late final CompanySchedule _s;
+  late final CompanySchedule _schedule;
   
-  // Variables para la selección de puestos
+  // Seat selection variables
   final Set<int> _selectedSeats = {};
-  final List<int> _mockReservedSeats = [3, 4, 10, 11]; 
+  final List<int> _mockReservedSeats = [3, 4, 10, 11]; // Mock reserved seats
   
   // Estado: Punto de recogida seleccionado por el usuario
-  LatLng? _pickupPoint; 
+  LatLng? _pickupPoint;
+  
+  // Chat variables
   List<ChatMessage> _tripMessages = const [];
   RealtimeChannel? _chatChannel;
   StateSetter? _modalSetState;
+  
+  // Mock data for top destinations (featured-desing)
+  final List<TopDestination> _topDestinations = [
+    TopDestination('Pasto', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Pasto.webp'), 
+    TopDestination('Cali', 'https://picsum.photos/id/10/200/150'), 
+    TopDestination('Medellín', 'https://picsum.photos/id/25/200/150'), 
+    TopDestination('Bogotá', 'https://picsum.photos/id/50/200/150'), 
+  ];
 
-  // 🟢 HELPER ACTUALIZADO: Para formatear la hora, manejando String o DateTime
+  // Helper to format time (handles String or DateTime)
   String _formatTime(dynamic timeValue) {
     DateTime date;
     
@@ -49,35 +66,34 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       date = timeValue;
     } else if (timeValue is String) {
       try {
-        // Intenta parsear el string como un DateTime completo (ISO 8601)
+        // Try to parse the full ISO 8601 string
         date = DateTime.parse(timeValue);
       } catch (e) {
-        // Si falla (ej: solo es "17:30:00"), añade una fecha base para parsear solo el tiempo
+        // If it fails (e.g., only "17:30:00"), assume time and add a base date
         try {
-           // Asume que la cadena es solo 'HH:mm:ss' o 'HH:mm' y añade una fecha.
            date = DateTime.parse('2000-01-01T$timeValue');
         } catch (_) {
-           return timeValue; // Devuelve el string sin parsear si todo falla
+           return timeValue; // Return the string unparsed if everything fails
         }
       }
     } else {
-      return 'N/A'; // Si no es ni String ni DateTime
+      return 'N/A'; // If it's neither String nor DateTime
     }
     
-    // Formatear el objeto DateTime resultante a HH:mm
+    // Format the resulting DateTime object to HH:mm
     return DateFormat('HH:mm').format(date);
   }
 
   @override
   void initState() {
     super.initState();
-    _s = widget.schedule as CompanySchedule;
+    _schedule = widget.schedule as CompanySchedule;
   }
   
-  // --- LÓGICA DE SELECCIÓN DE PUNTO DE RECOGIDA ---
+  // --- Pickup Point Selection Logic ---
   Future<void> _navigateToMapAndSelectPickup() async {
-    final LatLng originCoords = getCoordinates(_s.origin);
-    final LatLng destinationCoords = getCoordinates(_s.destination);
+    final LatLng originCoords = getCoordinates(_schedule.origin);
+    final LatLng destinationCoords = getCoordinates(_schedule.destination);
 
     final LatLng? selectedPickup = await Navigator.pushNamed(
       context, 
@@ -104,7 +120,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     }
   }
   
-  // --- LÓGICA DE RESERVA MODIFICADA ---
+  // --- Reservation Logic ---
   Future<void> _reserve() async {
     final seats = _selectedSeats.length;
     
@@ -115,7 +131,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       return;
     }
     
-    // PASO 1: Verificar si el punto de recogida ha sido seleccionado
+    // Step 1: Check if pickup point has been selected
     if (_pickupPoint == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -131,15 +147,17 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     }
 
 
-    // PASO 2: Procesar la reserva (solo se llega aquí si _pickupPoint != null)
+    // Step 2: Process the reservation (only reached if _pickupPoint != null)
     try {
-      await ref.read(passengerControllerProvider.notifier).reserveSeats(schedule: _s, seats: seats);
+      // NOTE: You need to pass the pickup location data here when you implement the service function.
+      // For now, only passing seats as in the original code:
+      await ref.read(passengerControllerProvider.notifier).reserveSeats(schedule: _schedule, seats: seats);
       
       if (!mounted) return;
       
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${AppStrings.success} - Puestos: ${_selectedSeats.join(', ')}'), backgroundColor: _accentColor));
       
-      // Navegación de vuelta al dashboard/home
+      // Navigate back to the dashboard/home
       Navigator.pop(context);
       
     } catch (_) {
@@ -153,13 +171,19 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     }
   }
 
+  // --- Chat Logic (UNIFICADO) ---
   Future<void> _openChat() async {
     final client = Supabase.instance.client;
     final svc = ChatService(client);
-    final msgs = await svc.listMessages(_s.id);
+    
+    // CORRECCIÓN: Usar _schedule.id para la ID del viaje.
+    final msgs = await svc.listMessages(_schedule.id); 
+    
     setState(() => _tripMessages = msgs);
     if (_modalSetState != null) _modalSetState!(() {});
-    _chatChannel ??= svc.subscribeTripMessages(_s.id, (msg) {
+    
+    // CORRECCIÓN: Usar _schedule.id para la ID del viaje.
+    _chatChannel ??= svc.subscribeTripMessages(_schedule.id, (msg) {
       final list = <ChatMessage>[..._tripMessages, msg];
       if (mounted) {
         setState(() => _tripMessages = list);
@@ -168,6 +192,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
         _modalSetState!(() {});
       }
     });
+    
     final modalFuture = showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -232,7 +257,8 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                           final userId = client.auth.currentUser?.id;
                           final text = ctrl.text.trim();
                           if (userId != null && text.isNotEmpty) {
-                            final msg = await svc.sendMessage(tripId: _s.id, senderId: userId, message: text);
+                            // CORRECCIÓN: Usar _schedule.id para la ID del viaje.
+                            final msg = await svc.sendMessage(tripId: _schedule.id, senderId: userId, message: text); 
                             final list = <ChatMessage>[..._tripMessages, msg];
                             if (mounted) {
                               setState(() => _tripMessages = list);
@@ -267,25 +293,25 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
           ),
         );
       }
-      return; 
+      return;  
     }
     
     setState(() {
       if (_selectedSeats.contains(seatNumber)) {
         _selectedSeats.remove(seatNumber);
       } else {
-        final available = _s.availableSeats;
+        final available = _schedule.availableSeats;
         if (_selectedSeats.length >= available) {
-           if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Solo quedan $available asientos disponibles.'),
-                  backgroundColor: _reservedColor,
-                  duration: const Duration(milliseconds: 1500),
-                ),
-              );
-            }
-            return;
+             if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                 SnackBar(
+                   content: Text('Solo quedan $available asientos disponibles.'),
+                   backgroundColor: _reservedColor,
+                   duration: const Duration(milliseconds: 1500),
+                 ),
+               );
+             }
+             return;
         }
         
         _selectedSeats.add(seatNumber);
@@ -296,18 +322,18 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
 
   @override
   Widget build(BuildContext context) {
-    final totalPrice = _s.price * _selectedSeats.length;
-    final totalSeats = _s.totalSeats; 
+    final totalPrice = _schedule.price * _selectedSeats.length;
+    final totalSeats = _schedule.totalSeats; 
     
-    // Texto dinámico para el botón principal
+    // Dynamic text for the main button
     final buttonText = _pickupPoint == null 
         ? 'SELECCIONAR PUNTO DE RECOGIDA' 
         : 'RESERVAR ${_selectedSeats.length} PUESTO(S) | \$${totalPrice.toStringAsFixed(2)}';
     
-    // Color dinámico para el botón principal
+    // Dynamic color for the main button
     final buttonColor = _pickupPoint == null ? _warningColor : _accentColor;
     
-    // Acción dinámica para el botón principal
+    // Dynamic action for the main button
     final VoidCallback buttonAction = _pickupPoint == null ? _navigateToMapAndSelectPickup : _reserve;
 
 
@@ -323,10 +349,12 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
           builder: (context, constraints) {
             final maxContentWidth = 900.0;
             final isWide = constraints.maxWidth > maxContentWidth;
-            final horizontalPadding = isWide ? (constraints.maxWidth - maxContentWidth) / 2 : 16.0;
+            final horizontalPadding = isWide ? (constraints.maxWidth - maxContentWidth) / 2 : 0.0; // Eliminado el padding horizontal de 16.0 para que lo agreguen los widgets internos.
             
             final seatSelectionWidget = _buildSeatSelection(context, totalSeats);
             final tripDetailsWidget = _buildTripDetails(context, totalSeats);
+            final pickupDisplayWidget = _buildPickupDisplay(context);
+            final topDestinationsWidget = _buildTopDestinations(context);
             
             return Padding(
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
@@ -334,7 +362,15 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(flex: 3, child: tripDetailsWidget),
+                        Expanded(flex: 3, child: Column(
+                          children: [
+                            Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: tripDetailsWidget),
+                            const SizedBox(height: 20),
+                            pickupDisplayWidget,
+                            const SizedBox(height: 20),
+                            topDestinationsWidget, // Added for wide screens
+                          ],
+                        )),
                         const SizedBox(width: 20),
                         Expanded(flex: 2, child: Container(
                           padding: const EdgeInsets.all(16),
@@ -347,23 +383,32 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          tripDetailsWidget,
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: _openChat,
-                                icon: const Icon(Icons.chat_bubble_outline),
-                                label: const Text(AppStrings.chat),
-                              ),
-                            ],
+                          // Detalles del viaje
+                          Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: tripDetailsWidget),
+                          
+                          // Botón de chat (UNIFICADO)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _openChat,
+                                  icon: const Icon(Icons.chat_bubble_outline),
+                                  label: const Text(AppStrings.chat),
+                                ),
+                              ],
+                            ),
                           ),
+
                           // Mostrar el punto de recogida seleccionado
-                          if (_pickupPoint != null) 
-                            _buildPickupDisplay(context),
+                          pickupDisplayWidget,
                           
                           const SizedBox(height: 20),
+                          topDestinationsWidget, // Added for narrow screens
+                          const SizedBox(height: 20),
                           Container(
+                            margin: const EdgeInsets.symmetric(horizontal: 16.0),
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8)]),
                             child: seatSelectionWidget
@@ -378,9 +423,9 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       bottomNavigationBar: Padding(
         padding: const EdgeInsets.all(16.0),
         child: ElevatedButton.icon(
-          // La reserva solo se activa si hay puestos seleccionados O si se está en el paso de seleccionar el punto de recogida
+          // Reservation is enabled only if seats are selected OR if we are in the pickup selection step
           onPressed: (_selectedSeats.isNotEmpty || _pickupPoint == null) ? buttonAction : null, 
-          // Usar el texto y color dinámicos
+          // Use dynamic text and color
           icon: Icon(_pickupPoint == null ? Icons.map : Icons.check_circle_outline),
           label: Text(buttonText, style: const TextStyle(fontWeight: FontWeight.bold)),
           style: ElevatedButton.styleFrom(
@@ -394,7 +439,88 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     );
   }
   
-  // Widget para mostrar el punto de recogida seleccionado
+  // --- NEW WIDGET: Top Destinations with Images ---
+  Widget _buildTopDestinations(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Text(
+            'Destinos Más Buscados',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: _primaryColor),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 150, // Height for the horizontal list
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            itemCount: _topDestinations.length,
+            itemBuilder: (context, index) {
+              final destination = _topDestinations[index];
+              return Padding(
+                padding: EdgeInsets.only(right: index == _topDestinations.length - 1 ? 0 : 12),
+                child: _buildDestinationCard(destination.city, destination.imageUrl),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+  
+  Widget _buildDestinationCard(String city, String imageUrl) {
+    return Container(
+      width: 150,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Container(
+                  color: Colors.grey.shade200,
+                  alignment: Alignment.center,
+                  child: const Icon(Icons.image_not_supported, color: Colors.black38),
+                ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                          : null,
+                      color: _primaryColor,
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(
+              city,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Widget to display the selected pickup point
   Widget _buildPickupDisplay(BuildContext context) {
     if (_pickupPoint == null) return const SizedBox.shrink();
     return Card(
@@ -431,7 +557,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     );
   }
 
-  // Widget para los detalles del viaje
+  // Widget for trip details
   Widget _buildTripDetails(BuildContext context, int totalSeats) {
     return Card(
       elevation: 4,
@@ -447,29 +573,29 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    '${_s.origin} → ${_s.destination}',
+                    '${_schedule.origin} → ${_schedule.destination}',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.black87),
                   ),
                 ),
               ],
             ),
             const Divider(height: 25),
-            // CORRECCIÓN APLICADA AQUÍ: Se usa _formatTime para las horas
-            _detailRow(Icons.schedule, 'Hora de Salida', _formatTime(_s.departureTime)),
-            _detailRow(Icons.access_time, 'Hora de Llegada', _formatTime(_s.arrivalTime)),
-            _detailRow(Icons.directions_bus, 'Tipo de Vehículo', _s.vehicleType ?? 'N/A'),
-            _detailRow(Icons.badge, 'Placa del Vehículo', _s.vehicleId ?? 'N/A'),
+            // Time formatting applied here
+            _detailRow(Icons.schedule, 'Hora de Salida', _formatTime(_schedule.departureTime)),
+            _detailRow(Icons.access_time, 'Hora de Llegada', _formatTime(_schedule.arrivalTime)),
+            _detailRow(Icons.directions_bus, 'Tipo de Vehículo', _schedule.vehicleType ?? 'N/A'),
+            _detailRow(Icons.badge, 'Placa del Vehículo', _schedule.vehicleId ?? 'N/A'),
             _detailRow(Icons.person_pin, 'Nombre del Conductor', 'N/A'), 
             const Divider(height: 25),
-            _detailRow(Icons.money, 'Precio por Puesto', '\$${_s.price.toStringAsFixed(2)}'),
-            _detailRow(Icons.event_seat, 'Puestos Disponibles / Total', '${_s.availableSeats} / $totalSeats'),
+            _detailRow(Icons.money, 'Precio por Puesto', '\$${_schedule.price.toStringAsFixed(2)}'),
+            _detailRow(Icons.event_seat, 'Puestos Disponibles / Total', '${_schedule.availableSeats} / $totalSeats'),
           ],
         ),
       ),
     );
   }
   
-  // Fila de detalle reutilizable
+  // Reusable detail row widget
   Widget _detailRow(IconData icon, String title, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8.0),
@@ -486,7 +612,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     );
   }
 
-  // Widget de selección gráfica de asientos
+  // Graphical seat selection widget
   Widget _buildSeatSelection(BuildContext context, int totalSeats) {
     const int seatsPerRow = 4; 
     final int totalRows = (totalSeats / seatsPerRow).ceil();
@@ -499,7 +625,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
           style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, color: _primaryColor)
         ),
         const SizedBox(height: 20),
-        // Cabina del conductor
+        // Driver cabin
         Container(
           height: 30,
           width: 50,
@@ -512,7 +638,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
         ),
         const SizedBox(height: 10),
         
-        // Asientos
+        // Seats layout
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -526,42 +652,46 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: List.generate(seatsPerRow, (colIndex) {
-                    final seatNumber = (rowIndex * seatsPerRow) + colIndex + 1;
-                    if (seatNumber > totalSeats) return const SizedBox.shrink();
+                    final seatNumber = rowIndex * seatsPerRow + colIndex + 1;
+                    
+                    if (seatNumber > totalSeats) {
+                      return const SizedBox.shrink(); // Hide extra seats
+                    }
 
                     final isReserved = _mockReservedSeats.contains(seatNumber);
                     final isSelected = _selectedSeats.contains(seatNumber);
-
-                    Color bgColor;
+                    
+                    Color seatColor;
                     if (isReserved) {
-                      bgColor = _reservedColor;
+                      seatColor = _reservedColor;
                     } else if (isSelected) {
-                      bgColor = _selectedColor;
+                      seatColor = _selectedColor;
                     } else {
-                      bgColor = _availableColor;
+                      seatColor = _availableColor;
                     }
 
-                    return InkWell(
+                    return GestureDetector(
                       onTap: () => _toggleSeat(seatNumber),
-                      borderRadius: BorderRadius.circular(8),
                       child: Container(
                         width: 40,
                         height: 40,
+                        margin: EdgeInsets.only(left: colIndex == 1 ? 20 : 0), // Aisle
                         decoration: BoxDecoration(
-                          color: bgColor,
+                          color: seatColor,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: isSelected ? _primaryColor : Colors.grey.shade400, width: isSelected ? 2 : 1),
+                          border: Border.all(color: isReserved ? Colors.white : _primaryColor.withOpacity(0.5)),
+                          boxShadow: [
+                            if (isSelected) BoxShadow(color: _selectedColor.withOpacity(0.5), blurRadius: 4),
+                          ],
                         ),
-                        child: Center(
-                            child: Text(
-                              seatNumber.toString(),
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: isReserved || isSelected ? Colors.white : Colors.black87,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          seatNumber.toString(),
+                          style: TextStyle(
+                            color: isReserved ? Colors.white : (isSelected ? Colors.white : _primaryColor),
+                            fontWeight: FontWeight.bold,
                           ),
+                        ),
                       ),
                     );
                   }),
@@ -570,34 +700,43 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
             }),
           ),
         ),
+        
         const SizedBox(height: 20),
-        // Leyenda
-        _buildLegend(),
+        
+        // Legend
+        _buildSeatLegend(),
       ],
     );
   }
-
-  Widget _buildLegend() {
+  
+  // Seat Legend Widget
+  Widget _buildSeatLegend() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
         _legendItem(_availableColor, 'Disponible'),
-        _legendItem(_selectedColor, 'Seleccionado'),
         _legendItem(_reservedColor, 'Reservado'),
+        _legendItem(_selectedColor, 'Seleccionado'),
       ],
     );
   }
-
+  
+  // Reusable Legend Item
   Widget _legendItem(Color color, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Row(
-        children: [
-          Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
-          const SizedBox(width: 4),
-          Text(text, style: const TextStyle(fontSize: 12)),
-        ],
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 15,
+          height: 15,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: _primaryColor.withOpacity(0.5)),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(text, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+      ],
     );
   }
 }

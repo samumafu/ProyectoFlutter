@@ -14,6 +14,13 @@ const Color _despegarGreyText = Color(0xFF666666); // Texto gris
 const Color _despegarBackgroundColor = Color(0xFFF8F9FA); // Fondo casi blanco
 const double _maxContentWidth = 900.0; // Constante global para centrar contenido en web
 
+// Data structure for top destinations (NEW)
+class TopDestination {
+  final String city;
+  final String imageUrl;
+  TopDestination(this.city, this.imageUrl);
+}
+
 class PassengerSearchTripsScreen extends ConsumerStatefulWidget {
   const PassengerSearchTripsScreen({super.key});
 
@@ -29,8 +36,18 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
   String? _selectedOrigin;
   String? _selectedDestination;
   
-  // 🛑 NUEVO ESTADO: Rastrea si el destino fue seleccionado de la lista popular
+  // State: Tracks if the destination was selected from the popular list
   bool _hasSelectedPopularDestination = false; 
+
+  // Mock data for top destinations (UPDATED WITH SUPABASE URL)
+  final List<TopDestination> _topDestinations = [
+    // ⬅️ URL de Supabase para Pasto
+    TopDestination('Pasto', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Pasto.jpg'), 
+    // URLs Placeholder (reemplazar)
+    TopDestination('Ipiales', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/ipiales.jpg'), 
+    TopDestination('Tumaco', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Tumaco.jpg'), 
+    TopDestination('Tuquerres', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Tuquerres.jpg'), 
+  ];
 
   @override
   void initState() {
@@ -63,7 +80,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     Navigator.pushNamed(context, '/passenger/history');
   }
 
-  // Función para restablecer el destino al modo Autocomplete
+  // Function to reset the destination to Autocomplete mode
   void _clearDestination() {
     setState(() {
       _destinationCtrl.clear();
@@ -71,26 +88,26 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     });
   }
 
-  // Nuevo Widget de Autocompletado de Municipio
+  // Municipality Autocomplete Widget
   Widget _buildMunicipalityAutocomplete({
     required String label,
     required TextEditingController controller,
     required List<String> availableMunicipalities,
-    required bool isDestination, // Para manejar el caso de destino
+    required bool isDestination, 
   }) {
     
-    // 🛑 Manejar el caso especial cuando el destino fue seleccionado de la lista popular
+    // Handle the special case when the destination was selected from the popular list
     if (isDestination && _hasSelectedPopularDestination) {
       return TextFormField(
         controller: controller,
-        readOnly: true, // No permitir escribir ya que ya seleccionó
+        readOnly: true, 
         decoration: InputDecoration(
           labelText: label,
           labelStyle: const TextStyle(color: _despegarPrimaryBlue, fontSize: 14, fontWeight: FontWeight.bold),
           prefixIcon: const Icon(Icons.pin_drop, color: _despegarPrimaryBlue),
           suffixIcon: IconButton(
             icon: const Icon(Icons.clear, color: _despegarGreyText),
-            onPressed: _clearDestination, // Limpiar y volver al Autocomplete
+            onPressed: _clearDestination, 
             tooltip: 'Cambiar Destino',
           ),
           filled: true,
@@ -104,7 +121,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
       );
     }
 
-    // --- Lógica del Autocomplete Original para Origen y Destino (si no ha seleccionado popular) ---
+    // Original Autocomplete Logic for Origin and Destination 
     Iterable<String> _municipalityFilter(TextEditingValue textEditingValue) {
       if (textEditingValue.text.isEmpty) {
         return const Iterable<String>.empty();
@@ -116,10 +133,9 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     }
 
     return Autocomplete<String>(
-      // textEditingController: controller, // Se omite para evitar el error de FocusNode
       
       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-        // Vincula el controlador externo (el del Stateful Widget) con el controlador interno del Autocomplete
+        // Link the external controller with the internal Autocomplete controller
         controller.text = textEditingController.text;
         
         return TextFormField(
@@ -184,11 +200,90 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
       },
     );
   }
+  
+  // NEW WIDGET: Card to display image and handle selection
+  Widget _buildDestinationCard(TopDestination destination) {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _destinationCtrl.text = destination.city; 
+          _hasSelectedPopularDestination = true; 
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Destino seleccionado: ${destination.city}. Ahora ingresa el origen.')),
+        );
+      },
+      child: Container(
+        width: 150,
+        margin: const EdgeInsets.only(right: 15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              blurRadius: 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                child: Image.network(
+                  destination.imageUrl, // ⬅️ Supabase URL
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) => Container(
+                    color: Colors.grey.shade200,
+                    alignment: Alignment.center,
+                    child: Icon(Icons.broken_image, color: _despegarGreyText.withOpacity(0.5), size: 40),
+                  ),
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: _despegarPrimaryBlue,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                children: [
+                  Text(
+                    destination.city,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: _despegarDarkText,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const Text(
+                    'Seleccionar Destino',
+                    style: TextStyle(color: _despegarPrimaryBlue, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-  // Nuevo Widget para la sección de "Destinos más buscados"
+  // Updated Widget for the "Most Searched Destinations" section
   Widget _buildPopularCitiesSection(BuildContext context, bool isNarrow) {
-    final List<String> popularCities = ['Pasto', 'Ipiales', 'Tumaco', 'Túquerres'];
-
+    
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16.0 : 0),
       child: Column(
@@ -204,64 +299,13 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
           ),
           const SizedBox(height: 15),
           SizedBox(
-            height: 160,
+            height: 180, // Increased height to accommodate images
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
-              itemCount: popularCities.length,
+              itemCount: _topDestinations.length, // Use the list with Supabase URLs
               itemBuilder: (context, index) {
-                final city = popularCities[index];
-                return GestureDetector(
-                  onTap: () {
-                    // 🛑 ¡CORRECCIÓN FINAL! Seteamos el texto y la bandera de estado.
-                    setState(() {
-                      _destinationCtrl.text = city; 
-                      _hasSelectedPopularDestination = true; // Activa el modo TextFormField
-                    });
-                    
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Destino seleccionado: $city. Ahora ingresa el origen.')),
-                    );
-                  },
-                  child: Container(
-                    width: 150,
-                    margin: const EdgeInsets.only(right: 15),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.grey.withOpacity(0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.location_city,
-                          size: 40,
-                          color: _despegarPrimaryBlue.withOpacity(0.7),
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          city,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: _despegarDarkText,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const Text(
-                          'Seleccionar Destino',
-                          style: TextStyle(color: _despegarPrimaryBlue, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
+                final destination = _topDestinations[index];
+                return _buildDestinationCard(destination); // ⬅️ Call the new image card widget
               },
             ),
           ),
@@ -270,7 +314,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     );
   }
 
-  // Widget para el formulario de búsqueda principal (rediseñado al estilo Despegar)
+  // Widget for the main search form (redesigned Despegar style)
   Widget _buildSearchForm(BuildContext context, bool isNarrow, List<String> availableMunicipalities) {
     final bool isSearchEnabled = availableMunicipalities.length > 1 || (availableMunicipalities.length == 1 && availableMunicipalities.first != 'Cargando...');
 
@@ -308,7 +352,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
           ),
           const SizedBox(height: 20),
 
-          // Campo de Origen con Autocompletado (Autocomplete normal)
+          // Origin field with Autocomplete
           _buildMunicipalityAutocomplete(
             label: AppStrings.origin,
             controller: _originCtrl,
@@ -317,17 +361,17 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
           ),
           const SizedBox(height: 15),
           
-          // Campo de Destino: Usará el Autocomplete O el TextFormField simple.
+          // Destination field: Uses Autocomplete OR the simple TextFormField.
           _buildMunicipalityAutocomplete(
             label: AppStrings.destination,
             controller: _destinationCtrl,
             availableMunicipalities: isSearchEnabled ? availableMunicipalities : ['Cargando...'],
-            isDestination: true, // Indica que es el campo de destino
+            isDestination: true, // Indicates that it is the destination field
           ),
           const SizedBox(height: 20),
 
           ElevatedButton.icon(
-            onPressed: isSearchEnabled ? _search : null, // Deshabilitar si no hay municipios
+            onPressed: isSearchEnabled ? _search : null, 
             icon: const Icon(Icons.search),
             label: Text(
               isSearchEnabled ? AppStrings.search : 'Cargando Municipios...', 
@@ -346,7 +390,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     );
   }
 
-  // Encabezado de la Sección de Viajes
+  // Trip Section Header
   Widget _buildTripsSectionHeader(BuildContext context) {
     return Card(
       elevation: 3,
@@ -378,14 +422,14 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     );
   }
 
-  // Simulación de Carga (Skeletor)
+  // Loading Simulation (Skeleton)
   Widget _buildLoadingSkeletons(bool isNarrow) {
     return Column(
       children: List.generate(3, (index) => 
         Padding(
           padding: const EdgeInsets.only(bottom: 12.0),
           child: Container(
-            height: isNarrow ? 120 : 150, // Altura de la tarjeta
+            height: isNarrow ? 120 : 150, 
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(12),
@@ -398,7 +442,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     );
   }
 
-  // Mensaje cuando no hay viajes
+  // Message when no trips are found
   Widget _buildNoTripsFound(BuildContext context) {
     return Center(
       child: Padding(
@@ -423,7 +467,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     );
   }
 
-  // Lista de viajes (reestructura la presentación)
+  // Trip List
   Widget _buildTripsList(BuildContext context, List<CompanySchedule> trips) {
     return ListView.builder(
       shrinkWrap: true,
@@ -433,7 +477,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
       itemBuilder: (ctx, i) {
         final CompanySchedule s = trips[i];
         return Padding(
-          padding: const EdgeInsets.only(bottom: 15.0), // Espacio un poco mayor entre tarjetas
+          padding: const EdgeInsets.only(bottom: 15.0), 
           child: PassengerTripCard(
             schedule: s,
             onOpen: () {
@@ -449,7 +493,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     );
   }
 
-  // Sección de Próximos Viajes (función contenedora)
+  // Upcoming Trips Section (Container function)
   Widget _buildTripsSection(BuildContext context, List<CompanySchedule> trips, bool isNarrow, bool isLoading, String? error) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isNarrow ? 16.0 : 0),
@@ -458,12 +502,12 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
         children: [
           const SizedBox(height: 30),
           
-          // Título destacado
+          // Highlighted Title
           _buildTripsSectionHeader(context),
           
           const SizedBox(height: 15),
 
-          // Manejo de Error
+          // Error Handling
           if (error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -473,7 +517,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
               ),
             ),
 
-          // Contenido de la Lista: Carga, Vacío o Resultados
+          // List Content: Loading, Empty, or Results
           if (isLoading) 
             _buildLoadingSkeletons(isNarrow) 
           else if (trips.isEmpty)
@@ -490,7 +534,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
     final state = ref.watch(passengerControllerProvider);
     final trips = state.trips;
     
-    // Si los municipios están vacíos, mostrar "Cargando..."
+    // If municipalities are empty, show "Cargando..."
     final availableMunicipalities = state.municipalities.isEmpty
                                       ? ['Cargando...'] 
                                       : state.municipalities;
@@ -543,7 +587,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 1. Área superior (Banner Azul Claro)
+                  // 1. Top Area (Light Blue Banner)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.only(top: 40, bottom: 90, left: 24, right: 24),
@@ -563,21 +607,21 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
                     ),
                   ),
 
-                  // 2. Formulario de Búsqueda Flotante y Mensaje
+                  // 2. Floating Search Form and Message
                   Transform.translate(
-                    offset: const Offset(0, -50), // Subir el formulario para superponerlo
+                    offset: const Offset(0, -50), // Move the form up to overlap
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // Sección de destinos más buscados
+                        // Most Searched Destinations Section
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                          child: _buildPopularCitiesSection(context, isNarrow),
+                          child: _buildPopularCitiesSection(context, isNarrow), // ⬅️ UPDATED
                         ),
                         
                         const SizedBox(height: 20),
                         
-                        // Tarjeta de Búsqueda
+                        // Search Card
                         Padding(
                           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
                           child: _buildSearchForm(context, isNarrow, availableMunicipalities),
@@ -586,7 +630,7 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
                     ),
                   ),
                   
-                  // 3. Sección de Próximos Viajes
+                  // 3. Upcoming Trips Section
                   _buildTripsSection(
                     context, 
                     trips, 
@@ -601,11 +645,10 @@ class _PassengerSearchTripsScreenState extends ConsumerState<PassengerSearchTrip
         ),
       ),
       
-      // AÑADIR EL FLOATING ACTION BUTTON AQUÍ
+      // FLOATING ACTION BUTTON
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // Navegar a la pantalla del asistente de chat
-          // Asegúrate de que '/passenger/chat-assistant' esté definido en tus rutas.
+          // Navigate to the chat assistant screen
           Navigator.pushNamed(context, '/passenger/chat-assistant');
         },
         label: const Text("Tu Flota IA"),
