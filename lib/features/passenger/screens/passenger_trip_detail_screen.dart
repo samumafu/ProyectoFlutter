@@ -7,7 +7,10 @@ import 'package:tu_flota/core/services/supabase_service.dart';
 
 import 'package:latlong2/latlong.dart';
 import 'package:tu_flota/core/constants/route_coordinates.dart';
-import 'package:intl/intl.dart';
+import 'package:intl/intl.dart'; // Importación necesaria para DateFormat
+import 'package:tu_flota/core/services/chat_service.dart';
+import 'package:tu_flota/features/company/models/chat_message_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Style Definitions
 const Color _primaryColor = Color(0xFF1E88E5);
@@ -40,15 +43,21 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
   final List<int> _mockReservedSeats = [3, 4, 10, 11]; // Mock reserved seats
   
   // State: User selected pickup point
-  LatLng? _pickupPoint; 
+  LatLng? _pickupPoint;
   
-  // Mock data for top destinations (URLs from previous context)
+  // Mock data for top destinations
   final List<TopDestination> _topDestinations = [
     TopDestination('Pasto', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Pasto.webp'), 
     TopDestination('Cali', 'https://picsum.photos/id/10/200/150'), 
     TopDestination('Medellín', 'https://picsum.photos/id/25/200/150'), 
     TopDestination('Bogotá', 'https://picsum.photos/id/50/200/150'), 
   ];
+
+  // Variables de estado para el chat (incorporadas de 'main')
+  List<ChatMessage> _tripMessages = const [];
+  RealtimeChannel? _chatChannel;
+  StateSetter? _modalSetState;
+
 
   // Helper to format time (handles String or DateTime)
   String _formatTime(dynamic timeValue) {
@@ -163,6 +172,117 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     }
   }
 
+  // --- Chat Logic (incorporada de 'main') ---
+  Future<void> _openChat() async {
+    final client = Supabase.instance.client;
+    final svc = ChatService(client);
+    
+    // CORRECCIÓN: Usar _schedule.id en lugar de _s.id
+    final msgs = await svc.listMessages(_schedule.id); 
+    
+    setState(() => _tripMessages = msgs);
+    if (_modalSetState != null) _modalSetState!(() {});
+    
+    // CORRECCIÓN: Usar _schedule.id en lugar de _s.id
+    _chatChannel ??= svc.subscribeTripMessages(_schedule.id, (msg) {
+      final list = <ChatMessage>[..._tripMessages, msg];
+      if (mounted) {
+        setState(() => _tripMessages = list);
+      }
+      if (_modalSetState != null) {
+        _modalSetState!(() {});
+      }
+    });
+    
+    final modalFuture = showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            _modalSetState = setModalState;
+            final ctrl = TextEditingController();
+            final messages = _tripMessages;
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 12, right: 12, top: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.forum_outlined),
+                    title: const Text(AppStrings.chat),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: messages.isEmpty
+                        ? const Center(child: Text(AppStrings.noMessages))
+                        : ListView.builder(
+                            itemCount: messages.length,
+                            itemBuilder: (_, i) {
+                              final m = messages[i];
+                              final uid = client.auth.currentUser?.id;
+                              final isMe = uid == m.senderId;
+                              return Align(
+                                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: isMe ? const Color(0xFFE6F3FF) : const Color(0xFFF0F0F0),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    m.message,
+                                    textAlign: isMe ? TextAlign.right : TextAlign.left,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: ctrl,
+                          decoration: const InputDecoration(hintText: AppStrings.message),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: () async {
+                          final userId = client.auth.currentUser?.id;
+                          final text = ctrl.text.trim();
+                          if (userId != null && text.isNotEmpty) {
+                            // CORRECCIÓN: Usar _schedule.id en lugar de _s.id
+                            final msg = await svc.sendMessage(tripId: _schedule.id, senderId: userId, message: text); 
+                            final list = <ChatMessage>[..._tripMessages, msg];
+                            if (mounted) {
+                              setState(() => _tripMessages = list);
+                            }
+                            setModalState(() {});
+                            ctrl.clear();
+                          }
+                        },
+                      )
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    Future.microtask(() {
+      if (_modalSetState != null) _modalSetState!(() {});
+    });
+  }
+
   void _toggleSeat(int seatNumber) {
     if (_mockReservedSeats.contains(seatNumber)) {
       if (mounted) {
@@ -174,7 +294,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
           ),
         );
       }
-      return; 
+      return;  
     }
     
     setState(() {
@@ -230,7 +350,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
           builder: (context, constraints) {
             final maxContentWidth = 900.0;
             final isWide = constraints.maxWidth > maxContentWidth;
-            final horizontalPadding = isWide ? (constraints.maxWidth - maxContentWidth) / 2 : 16.0;
+            final horizontalPadding = isWide ? (constraints.maxWidth - maxContentWidth) / 2 : 0.0; // Eliminado el padding horizontal de 16.0 para que lo agreguen los widgets internos.
             
             final seatSelectionWidget = _buildSeatSelection(context, totalSeats);
             final tripDetailsWidget = _buildTripDetails(context, totalSeats);
@@ -264,9 +384,24 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // ⬅️ Resolución de conflicto: Mantener el widget de detalles y el padding para pantallas estrechas.
+                          // Detalles del viaje
                           Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: tripDetailsWidget),
                           
+                          // Botón de chat (incorporado de 'main')
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                OutlinedButton.icon(
+                                  onPressed: _openChat,
+                                  icon: const Icon(Icons.chat_bubble_outline),
+                                  label: const Text(AppStrings.chat),
+                                ),
+                              ],
+                            ),
+                          ),
+
                           // Mostrar el punto de recogida seleccionado
                           pickupDisplayWidget,
                           
