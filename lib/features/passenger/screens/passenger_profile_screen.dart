@@ -56,21 +56,21 @@ final userProfileProvider = FutureProvider<MockUserProfile>((ref) async {
 
 
 class PassengerProfileScreen extends ConsumerWidget {
-  const PassengerProfileScreen({super.key});
+  const PassengerProfileScreen({super.key});
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     // 1. Observar el FutureProvider para obtener los datos del perfil
     final profileAsync = ref.watch(userProfileProvider);
 
     return Scaffold(
-      backgroundColor: _backgroundColor,
-      appBar: AppBar(
-        title: const Text('Mi Perfil', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: _primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
+      backgroundColor: _backgroundColor,
+      appBar: AppBar(
+        title: const Text('Mi Perfil', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: _primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
       
       // 2. Usar el FutureBuilder de Riverpod (AsyncValue)
       body: profileAsync.when(
@@ -151,60 +151,60 @@ class PassengerProfileScreen extends ConsumerWidget {
         },
       ),
     );
-  }
+  }
 
-  // --- WIDGET HELPER: Encabezado y Avatar ---
-  Widget _buildHeaderAndAvatar(BuildContext context, String name, String email, String? avatarUrl) {
-    return Column(
-      children: [
-        CircleAvatar(
-          radius: 60,
-          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
-          backgroundColor: _primaryColor.withOpacity(0.1),
-          child: avatarUrl == null 
-              ? const Icon(Icons.person, size: 70, color: _primaryColor)
-              : null,
-        ),
-        const SizedBox(height: 15),
-        Text(
-          name,
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: Colors.black87),
-        ),
-        Text(
-          email,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey.shade600, fontStyle: FontStyle.italic),
-        ),
-      ],
-    );
-  }
+  // --- WIDGET HELPER: Encabezado y Avatar ---
+  Widget _buildHeaderAndAvatar(BuildContext context, String name, String email, String? avatarUrl) {
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 60,
+          backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl) : null,
+          backgroundColor: _primaryColor.withOpacity(0.1),
+          child: avatarUrl == null 
+              ? const Icon(Icons.person, size: 70, color: _primaryColor)
+              : null,
+        ),
+        const SizedBox(height: 15),
+        Text(
+          name,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w900, color: Colors.black87),
+        ),
+        Text(
+          email,
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey.shade600, fontStyle: FontStyle.italic),
+        ),
+      ],
+    );
+  }
 
-  // --- WIDGET HELPER: Fila de detalle reutilizable para el perfil ---
-  Widget _buildProfileRow(BuildContext context, IconData icon, String title, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: _accentColor.withOpacity(0.8), size: 24), // Usar el color de acento para los iconos de detalle
-          const SizedBox(width: 15),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.black),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // --- WIDGET HELPER: Fila de detalle reutilizable para el perfil ---
+  Widget _buildProfileRow(BuildContext context, IconData icon, String title, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _accentColor.withOpacity(0.8), size: 24), // Usar el color de acento para los iconos de detalle
+          const SizedBox(width: 15),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, color: Colors.black),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
