@@ -7,7 +7,7 @@ import 'package:tu_flota/core/services/supabase_service.dart';
 
 import 'package:latlong2/latlong.dart';
 import 'package:tu_flota/core/constants/route_coordinates.dart';
-import 'package:intl/intl.dart'; // Importación necesaria para DateFormat
+import 'package:intl/intl.dart'; 
 import 'package:tu_flota/core/services/chat_service.dart';
 import 'package:tu_flota/features/company/models/chat_message_model.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,12 +20,7 @@ const Color _selectedColor = Color(0xFF43A047);
 const Color _warningColor = Color(0xFFF9A825);
 const Color _availableColor = Color(0xFFE3F2FD);
 
-// Data structure for top destinations
-class TopDestination {
-  final String city;
-  final String imageUrl;
-  TopDestination(this.city, this.imageUrl);
-}
+// ELIMINADA: Data structure for top destinations (TopDestination)
 
 class PassengerTripDetailScreen extends ConsumerStatefulWidget {
   final Object? schedule;
@@ -50,13 +45,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
   RealtimeChannel? _chatChannel;
   StateSetter? _modalSetState;
   
-  // Mock data for top destinations (featured-desing)
-  final List<TopDestination> _topDestinations = [
-    TopDestination('Pasto', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Pasto.webp'), 
-    TopDestination('Cali', 'https://picsum.photos/id/10/200/150'), 
-    TopDestination('Medellín', 'https://picsum.photos/id/25/200/150'), 
-    TopDestination('Bogotá', 'https://picsum.photos/id/50/200/150'), 
-  ];
+  // ELIMINADA: Mock data for top destinations (_topDestinations)
 
   // Helper to format time (handles String or DateTime)
   String _formatTime(dynamic timeValue) {
@@ -349,12 +338,12 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
           builder: (context, constraints) {
             final maxContentWidth = 900.0;
             final isWide = constraints.maxWidth > maxContentWidth;
-            final horizontalPadding = isWide ? (constraints.maxWidth - maxContentWidth) / 2 : 0.0; // Eliminado el padding horizontal de 16.0 para que lo agreguen los widgets internos.
+            final horizontalPadding = isWide ? (constraints.maxWidth - maxContentWidth) / 2 : 0.0; 
             
             final seatSelectionWidget = _buildSeatSelection(context, totalSeats);
             final tripDetailsWidget = _buildTripDetails(context, totalSeats);
             final pickupDisplayWidget = _buildPickupDisplay(context);
-            final topDestinationsWidget = _buildTopDestinations(context);
+            // ELIMINADO: final topDestinationsWidget = _buildTopDestinations(context);
             
             return Padding(
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
@@ -368,7 +357,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                             const SizedBox(height: 20),
                             pickupDisplayWidget,
                             const SizedBox(height: 20),
-                            topDestinationsWidget, // Added for wide screens
+                            // ELIMINADO: topDestinationsWidget, 
                           ],
                         )),
                         const SizedBox(width: 20),
@@ -405,7 +394,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                           pickupDisplayWidget,
                           
                           const SizedBox(height: 20),
-                          topDestinationsWidget, // Added for narrow screens
+                          // ELIMINADO: topDestinationsWidget, 
                           const SizedBox(height: 20),
                           Container(
                             margin: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -439,86 +428,8 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     );
   }
   
-  // --- NEW WIDGET: Top Destinations with Images ---
-  Widget _buildTopDestinations(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(
-            'Destinos Más Buscados',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold, color: _primaryColor),
-          ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 150, // Height for the horizontal list
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            itemCount: _topDestinations.length,
-            itemBuilder: (context, index) {
-              final destination = _topDestinations[index];
-              return Padding(
-                padding: EdgeInsets.only(right: index == _topDestinations.length - 1 ? 0 : 12),
-                child: _buildDestinationCard(destination.city, destination.imageUrl),
-              );
-            },
-          ),
-        ),
-      ],
-    );
-  }
-  
-  Widget _buildDestinationCard(String city, String imageUrl) {
-    return Container(
-      width: 150,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: const Offset(0, 2))],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-              child: Image.network(
-                imageUrl,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
-                  color: Colors.grey.shade200,
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.image_not_supported, color: Colors.black38),
-                ),
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                          : null,
-                      color: _primaryColor,
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              city,
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // ELIMINADO: Widget _buildTopDestinations(BuildContext context) { ... }
+  // ELIMINADO: Widget _buildDestinationCard(String city, String imageUrl) { ... }
 
   // Widget to display the selected pickup point
   Widget _buildPickupDisplay(BuildContext context) {
