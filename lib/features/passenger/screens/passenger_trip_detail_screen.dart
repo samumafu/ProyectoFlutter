@@ -7,17 +7,17 @@ import 'package:tu_flota/core/services/supabase_service.dart';
 
 import 'package:latlong2/latlong.dart';
 import 'package:tu_flota/core/constants/route_coordinates.dart';
-import 'package:intl/intl.dart'; 
+import 'package:intl/intl.dart';
 
 // Style Definitions
 const Color _primaryColor = Color(0xFF1E88E5);
 const Color _accentColor = Color(0xFF00C853);
 const Color _reservedColor = Color(0xFFC62828);
 const Color _selectedColor = Color(0xFF43A047);
-const Color _warningColor = Color(0xFFF9A825); 
+const Color _warningColor = Color(0xFFF9A825);
 const Color _availableColor = Color(0xFFE3F2FD);
 
-// Data structure for top destinations (replace with real data/logic if needed)
+// Data structure for top destinations
 class TopDestination {
   final String city;
   final String imageUrl;
@@ -37,19 +37,18 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
   
   // Seat selection variables
   final Set<int> _selectedSeats = {};
-  final List<int> _mockReservedSeats = [3, 4, 10, 11]; 
+  final List<int> _mockReservedSeats = [3, 4, 10, 11]; // Mock reserved seats
   
   // State: User selected pickup point
   LatLng? _pickupPoint; 
   
-  // Mock data for top destinations (Replace URLs with real images or assets)
+  // Mock data for top destinations (URLs from previous context)
   final List<TopDestination> _topDestinations = [
-    TopDestination('Pasto', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Pasto.webp'), // Placeholder image
-    TopDestination('Cali', 'https://picsum.photos/id/10/200/150'), // Placeholder image
-    TopDestination('Medellín', 'https://picsum.photos/id/25/200/150'), // Placeholder image
-    TopDestination('Bogotá', 'https://picsum.photos/id/50/200/150'), // Placeholder image
+    TopDestination('Pasto', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Pasto.webp'), 
+    TopDestination('Cali', 'https://picsum.photos/id/10/200/150'), 
+    TopDestination('Medellín', 'https://picsum.photos/id/25/200/150'), 
+    TopDestination('Bogotá', 'https://picsum.photos/id/50/200/150'), 
   ];
-
 
   // Helper to format time (handles String or DateTime)
   String _formatTime(dynamic timeValue) {
@@ -163,7 +162,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       }
     }
   }
-  
+
   void _toggleSeat(int seatNumber) {
     if (_mockReservedSeats.contains(seatNumber)) {
       if (mounted) {
@@ -184,7 +183,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       } else {
         final available = _schedule.availableSeats;
         if (_selectedSeats.length >= available) {
-           if (mounted) {
+            if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text('Solo quedan $available asientos disponibles.'),
@@ -265,8 +264,12 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // ⬅️ Resolución de conflicto: Mantener el widget de detalles y el padding para pantallas estrechas.
                           Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: tripDetailsWidget),
+                          
+                          // Mostrar el punto de recogida seleccionado
                           pickupDisplayWidget,
+                          
                           const SizedBox(height: 20),
                           topDestinationsWidget, // Added for narrow screens
                           const SizedBox(height: 20),
@@ -356,6 +359,17 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                   alignment: Alignment.center,
                   child: const Icon(Icons.image_not_supported, color: Colors.black38),
                 ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Center(
+                    child: CircularProgressIndicator(
+                      value: loadingProgress.expectedTotalBytes != null
+                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
+                          : null,
+                      color: _primaryColor,
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -504,42 +518,46 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: List.generate(seatsPerRow, (colIndex) {
-                    final seatNumber = (rowIndex * seatsPerRow) + colIndex + 1;
-                    if (seatNumber > totalSeats) return const SizedBox.shrink();
+                    final seatNumber = rowIndex * seatsPerRow + colIndex + 1;
+                    
+                    if (seatNumber > totalSeats) {
+                      return const SizedBox.shrink(); // Hide extra seats
+                    }
 
                     final isReserved = _mockReservedSeats.contains(seatNumber);
                     final isSelected = _selectedSeats.contains(seatNumber);
-
-                    Color bgColor;
+                    
+                    Color seatColor;
                     if (isReserved) {
-                      bgColor = _reservedColor;
+                      seatColor = _reservedColor;
                     } else if (isSelected) {
-                      bgColor = _selectedColor;
+                      seatColor = _selectedColor;
                     } else {
-                      bgColor = _availableColor;
+                      seatColor = _availableColor;
                     }
 
-                    return InkWell(
+                    return GestureDetector(
                       onTap: () => _toggleSeat(seatNumber),
-                      borderRadius: BorderRadius.circular(8),
                       child: Container(
                         width: 40,
                         height: 40,
+                        margin: EdgeInsets.only(left: colIndex == 1 ? 20 : 0), // Aisle
                         decoration: BoxDecoration(
-                          color: bgColor,
+                          color: seatColor,
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: isSelected ? _primaryColor : Colors.grey.shade400, width: isSelected ? 2 : 1),
+                          border: Border.all(color: isReserved ? Colors.white : _primaryColor.withOpacity(0.5)),
+                          boxShadow: [
+                            if (isSelected) BoxShadow(color: _selectedColor.withOpacity(0.5), blurRadius: 4),
+                          ],
                         ),
-                        child: Center(
-                            child: Text(
-                              seatNumber.toString(),
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: isReserved || isSelected ? Colors.white : Colors.black87,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          seatNumber.toString(),
+                          style: TextStyle(
+                            color: isReserved ? Colors.white : (isSelected ? Colors.white : _primaryColor),
+                            fontWeight: FontWeight.bold,
                           ),
+                        ),
                       ),
                     );
                   }),
@@ -548,34 +566,43 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
             }),
           ),
         ),
+        
         const SizedBox(height: 20),
+        
         // Legend
-        _buildLegend(),
+        _buildSeatLegend(),
       ],
     );
   }
-
-  Widget _buildLegend() {
+  
+  // Seat Legend Widget
+  Widget _buildSeatLegend() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
         _legendItem(_availableColor, 'Disponible'),
-        _legendItem(_selectedColor, 'Seleccionado'),
         _legendItem(_reservedColor, 'Reservado'),
+        _legendItem(_selectedColor, 'Seleccionado'),
       ],
     );
   }
-
+  
+  // Reusable Legend Item
   Widget _legendItem(Color color, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0),
-      child: Row(
-        children: [
-          Container(width: 12, height: 12, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(3))),
-          const SizedBox(width: 4),
-          Text(text, style: const TextStyle(fontSize: 12)),
-        ],
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 15,
+          height: 15,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
+            border: Border.all(color: _primaryColor.withOpacity(0.5)),
+          ),
+        ),
+        const SizedBox(width: 5),
+        Text(text, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+      ],
     );
   }
 }

@@ -4,7 +4,7 @@ import 'package:tu_flota/features/passenger/models/reservation_model.dart';
 import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart'; // NECESARIO
 
 // ---------------------------------------------------
-// 1. DEFINICIONES DE TIPO (Typedefs) - Faltaban/Duplicadas
+// 1. DEFINICIONES DE TIPO (Typedefs)
 // ---------------------------------------------------
 typedef OnReservationInsert = void Function(Reservation reservation);
 typedef OnReservationUpdate = void Function(Reservation reservation);
@@ -35,6 +35,7 @@ class ReservationService {
   Future<Map<String, String>> getPassengerEmailsByIds(List<String> passengerIds) async {
     if (passengerIds.isEmpty) return {};
 
+    // ⬅️ Resolución de conflicto: Usar comillas para el filtro 'in' en PostgreSQL
     final idsList = passengerIds.map((e) => "'$e'").join(',');
 
     final pasajeros = await client
@@ -55,10 +56,12 @@ class ReservationService {
         .toList();
 
     if (userIds.isEmpty) return {};
-
+    
+    // ⬅️ Resolución de conflicto: Usar comillas para el filtro 'in' en PostgreSQL
     final uIdsList = userIds.map((e) => "'$e'").join(',');
 
     final users = await client
+        .schema('auth')
         .from('users')
         .select('id,email')
         .filter('id', 'in', '($uIdsList)');
