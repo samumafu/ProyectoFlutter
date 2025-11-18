@@ -38,6 +38,7 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
   final Map<String, List<ChatMessage>> _msgsByTrip = {};
   final Map<String, RealtimeChannel> _chatChannels = {};
   final Map<String, String> _passengerEmailById = {};
+  final Map<String, StateSetter> _modalSetStateByTrip = {};
   int _finishedCount = 0;
   int _transportedSeats = 0;
 
@@ -237,58 +238,103 @@ class _DriverDashboardScreenState extends ConsumerState<DriverDashboardScreen> {
 
   void _openChat(String tripId) {
     final client = ref.read(supabaseProvider);
+    ChatService(client).listMessages(tripId).then((msgs) {
+      if (mounted) {
+        setState(() => _msgsByTrip[tripId] = msgs);
+      }
+      final fn = _modalSetStateByTrip[tripId];
+      if (fn != null) fn(() {});
+    });
     if (!_chatChannels.containsKey(tripId)) {
       final ch = ChatService(client).subscribeTripMessages(tripId, (msg) {
         final list = <ChatMessage>[...( _msgsByTrip[tripId] ?? const []), msg];
-        setState(() => _msgsByTrip[tripId] = list);
+        if (mounted) {
+          setState(() => _msgsByTrip[tripId] = list);
+        }
+        final fn = _modalSetStateByTrip[tripId];
+        if (fn != null) {
+          fn(() {});
+        }
       });
       _chatChannels[tripId] = ch;
     }
-    showModalBottomSheet(
+    final modalFuture = showModalBottomSheet(
       context: context,
       builder: (context) {
-        final messages = _msgsByTrip[tripId] ?? const [];
-        final controller = TextEditingController();
-        return Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              Expanded(
-                child: messages.isEmpty
-                    ? const Center(child: Text(AppStrings.noMessages))
-                    : ListView.builder(
-                        itemCount: messages.length,
-                        itemBuilder: (_, i) => ListTile(
-                          title: Text(messages[i].message),
-                        ),
-                      ),
-              ),
-              Row(
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            _modalSetStateByTrip[tripId] = setModalState;
+            final messages = _msgsByTrip[tripId] ?? const [];
+            final controller = TextEditingController();
+            return Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
                 children: [
                   Expanded(
-                    child: TextField(
-                      controller: controller,
-                      decoration: const InputDecoration(hintText: AppStrings.message),
-                    ),
+                    child: messages.isEmpty
+                        ? const Center(child: Text(AppStrings.noMessages))
+                        : ListView.builder(
+                            itemCount: messages.length,
+                            itemBuilder: (_, i) {
+                              final m = messages[i];
+                              final uid = client.auth.currentUser?.id;
+                              final isMe = uid == m.senderId;
+                              return Align(
+                                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: isMe ? _despegarLightBlue : const Color(0xFFF0F0F0),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    m.message,
+                                    textAlign: isMe ? TextAlign.right : TextAlign.left,
+                                    style: TextStyle(color: isMe ? _despegarDarkText : _despegarGreyText),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.send),
-                    onPressed: () async {
-                      final userId = client.auth.currentUser?.id;
-                      final text = controller.text.trim();
-                      if (userId != null && text.isNotEmpty) {
-                        await ChatService(client).sendMessage(tripId: tripId, senderId: userId, message: text);
-                        controller.clear();
-                      }
-                    },
-                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          decoration: const InputDecoration(hintText: AppStrings.message),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: () async {
+                          final userId = client.auth.currentUser?.id;
+                          final text = controller.text.trim();
+                          if (userId != null && text.isNotEmpty) {
+                            final msg = await ChatService(client).sendMessage(tripId: tripId, senderId: userId, message: text);
+                            final list = <ChatMessage>[...( _msgsByTrip[tripId] ?? const []), msg];
+                            if (mounted) {
+                              setState(() => _msgsByTrip[tripId] = list);
+                            }
+                            setModalState(() {});
+                            controller.clear();
+                          }
+                        },
+                      ),
+                    ],
+                  )
                 ],
-              )
-            ],
-          ),
+              ),
+            );
+          },
         );
       },
     );
+    Future.microtask(() {
+      final fn = _modalSetStateByTrip[tripId];
+      if (fn != null) fn(() {});
+    });
   }
 
   @override

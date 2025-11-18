@@ -6,6 +6,10 @@ import 'package:latlong2/latlong.dart';
 // IMPORTACIÓN DEL DTO (Asumimos que está en este path)
 import 'package:tu_flota/features/company/models/company_schedule_model.dart'; 
 import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart';
+import 'package:tu_flota/core/constants/app_strings.dart';
+import 'package:tu_flota/core/services/chat_service.dart';
+import 'package:tu_flota/features/company/models/chat_message_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Definiciones de estilo (Alineadas con el resto de la app - estilo Despegar/Moderno)
 const Color _primaryColor = Color(0xFF0073E6); // Azul Moderno
@@ -29,6 +33,113 @@ class _PassengerHistoryScreenState extends ConsumerState<PassengerHistoryScreen>
   void initState() {
     super.initState();
     Future.microtask(() => ref.read(passengerControllerProvider.notifier).loadMyReservations());
+  }
+
+  final Map<String, List<ChatMessage>> _messagesByTrip = {};
+  final Map<String, RealtimeChannel> _chatChannels = {};
+  final Map<String, StateSetter> _modalSetters = {};
+
+  Future<void> _openChat(String tripId) async {
+    final client = Supabase.instance.client;
+    final svc = ChatService(client);
+    final msgs = await svc.listMessages(tripId);
+    setState(() => _messagesByTrip[tripId] = msgs);
+    final fn0 = _modalSetters[tripId];
+    if (fn0 != null) fn0(() {});
+    if (!_chatChannels.containsKey(tripId)) {
+      final ch = svc.subscribeTripMessages(tripId, (msg) {
+        final list = <ChatMessage>[...( _messagesByTrip[tripId] ?? const []), msg];
+        setState(() => _messagesByTrip[tripId] = list);
+        final fn = _modalSetters[tripId];
+        if (fn != null) fn(() {});
+      });
+      _chatChannels[tripId] = ch;
+    }
+    final modalFuture = showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            _modalSetters[tripId] = setModalState;
+            final ctrl = TextEditingController();
+            final messages = _messagesByTrip[tripId] ?? const [];
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 12, right: 12, top: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.forum_outlined),
+                    title: const Text(AppStrings.chat),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: messages.isEmpty
+                        ? const Center(child: Text(AppStrings.noMessages))
+                        : ListView.builder(
+                            itemCount: messages.length,
+                            itemBuilder: (_, i) {
+                              final m = messages[i];
+                              final uid = client.auth.currentUser?.id;
+                              final isMe = uid == m.senderId;
+                              return Align(
+                                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: isMe ? const Color(0xFFE6F3FF) : const Color(0xFFF0F0F0),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    m.message,
+                                    textAlign: isMe ? TextAlign.right : TextAlign.left,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: ctrl,
+                          decoration: const InputDecoration(hintText: AppStrings.message),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: () async {
+                          final userId = client.auth.currentUser?.id;
+                          final text = ctrl.text.trim();
+                          if (userId != null && text.isNotEmpty) {
+                            final msg = await svc.sendMessage(tripId: tripId, senderId: userId, message: text);
+                            final list = <ChatMessage>[...( _messagesByTrip[tripId] ?? const []), msg];
+                            setState(() => _messagesByTrip[tripId] = list);
+                            setModalState(() {});
+                            ctrl.clear();
+                          }
+                        },
+                      )
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    Future.microtask(() {
+      final fn = _modalSetters[tripId];
+      if (fn != null) fn(() {});
+    });
   }
 
   // Helper para obtener el color basado en el estado
@@ -389,6 +500,18 @@ class ReservationHistoryCard extends StatelessWidget {
                       icon: const Icon(Icons.map_outlined, size: 18, color: _primaryColor),
                       label: const Text('Ver Punto en Mapa'),
                     ),
+
+                  const SizedBox(width: 10),
+
+                  // Botón de Chat del Viaje
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      final state = context.findAncestorStateOfType<_PassengerHistoryScreenState>();
+                      state?._openChat(reservation.tripId);
+                    },
+                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
+                    label: Text(AppStrings.chat),
+                  ),
 
                   const SizedBox(width: 10),
 

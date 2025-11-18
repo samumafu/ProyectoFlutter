@@ -8,6 +8,9 @@ import 'package:tu_flota/core/services/supabase_service.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:tu_flota/core/constants/route_coordinates.dart';
 import 'package:intl/intl.dart'; // Importación necesaria para DateFormat
+import 'package:tu_flota/core/services/chat_service.dart';
+import 'package:tu_flota/features/company/models/chat_message_model.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Definiciones de estilo
 const Color _primaryColor = Color(0xFF1E88E5);
@@ -34,6 +37,9 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
   
   // Estado: Punto de recogida seleccionado por el usuario
   LatLng? _pickupPoint; 
+  List<ChatMessage> _tripMessages = const [];
+  RealtimeChannel? _chatChannel;
+  StateSetter? _modalSetState;
 
   // 🟢 HELPER ACTUALIZADO: Para formatear la hora, manejando String o DateTime
   String _formatTime(dynamic timeValue) {
@@ -146,7 +152,110 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       }
     }
   }
-  
+
+  Future<void> _openChat() async {
+    final client = Supabase.instance.client;
+    final svc = ChatService(client);
+    final msgs = await svc.listMessages(_s.id);
+    setState(() => _tripMessages = msgs);
+    if (_modalSetState != null) _modalSetState!(() {});
+    _chatChannel ??= svc.subscribeTripMessages(_s.id, (msg) {
+      final list = <ChatMessage>[..._tripMessages, msg];
+      if (mounted) {
+        setState(() => _tripMessages = list);
+      }
+      if (_modalSetState != null) {
+        _modalSetState!(() {});
+      }
+    });
+    final modalFuture = showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModalState) {
+            _modalSetState = setModalState;
+            final ctrl = TextEditingController();
+            final messages = _tripMessages;
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom, left: 12, right: 12, top: 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.forum_outlined),
+                    title: const Text(AppStrings.chat),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ),
+                  SizedBox(
+                    height: MediaQuery.of(context).size.height * 0.5,
+                    child: messages.isEmpty
+                        ? const Center(child: Text(AppStrings.noMessages))
+                        : ListView.builder(
+                            itemCount: messages.length,
+                            itemBuilder: (_, i) {
+                              final m = messages[i];
+                              final uid = client.auth.currentUser?.id;
+                              final isMe = uid == m.senderId;
+                              return Align(
+                                alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                                child: Container(
+                                  margin: const EdgeInsets.symmetric(vertical: 4),
+                                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: isMe ? const Color(0xFFE6F3FF) : const Color(0xFFF0F0F0),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    m.message,
+                                    textAlign: isMe ? TextAlign.right : TextAlign.left,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: ctrl,
+                          decoration: const InputDecoration(hintText: AppStrings.message),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.send),
+                        onPressed: () async {
+                          final userId = client.auth.currentUser?.id;
+                          final text = ctrl.text.trim();
+                          if (userId != null && text.isNotEmpty) {
+                            final msg = await svc.sendMessage(tripId: _s.id, senderId: userId, message: text);
+                            final list = <ChatMessage>[..._tripMessages, msg];
+                            if (mounted) {
+                              setState(() => _tripMessages = list);
+                            }
+                            setModalState(() {});
+                            ctrl.clear();
+                          }
+                        },
+                      )
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    Future.microtask(() {
+      if (_modalSetState != null) _modalSetState!(() {});
+    });
+  }
+
   void _toggleSeat(int seatNumber) {
     if (_mockReservedSeats.contains(seatNumber)) {
       if (mounted) {
@@ -239,6 +348,16 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           tripDetailsWidget,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: _openChat,
+                                icon: const Icon(Icons.chat_bubble_outline),
+                                label: const Text(AppStrings.chat),
+                              ),
+                            ],
+                          ),
                           // Mostrar el punto de recogida seleccionado
                           if (_pickupPoint != null) 
                             _buildPickupDisplay(context),
