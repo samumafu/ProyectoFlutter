@@ -42,22 +42,21 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
   final Set<int> _selectedSeats = {};
   final List<int> _mockReservedSeats = [3, 4, 10, 11]; // Mock reserved seats
   
-  // State: User selected pickup point
+  // Estado: Punto de recogida seleccionado por el usuario
   LatLng? _pickupPoint;
   
-  // Mock data for top destinations
+  // Chat variables
+  List<ChatMessage> _tripMessages = const [];
+  RealtimeChannel? _chatChannel;
+  StateSetter? _modalSetState;
+  
+  // Mock data for top destinations (featured-desing)
   final List<TopDestination> _topDestinations = [
     TopDestination('Pasto', 'https://iemghgzismoncmirtkyy.supabase.co/storage/v1/object/public/destinos/Pasto.webp'), 
     TopDestination('Cali', 'https://picsum.photos/id/10/200/150'), 
     TopDestination('Medellín', 'https://picsum.photos/id/25/200/150'), 
     TopDestination('Bogotá', 'https://picsum.photos/id/50/200/150'), 
   ];
-
-  // Variables de estado para el chat (incorporadas de 'main')
-  List<ChatMessage> _tripMessages = const [];
-  RealtimeChannel? _chatChannel;
-  StateSetter? _modalSetState;
-
 
   // Helper to format time (handles String or DateTime)
   String _formatTime(dynamic timeValue) {
@@ -172,18 +171,18 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
     }
   }
 
-  // --- Chat Logic (incorporada de 'main') ---
+  // --- Chat Logic (UNIFICADO) ---
   Future<void> _openChat() async {
     final client = Supabase.instance.client;
     final svc = ChatService(client);
     
-    // CORRECCIÓN: Usar _schedule.id en lugar de _s.id
+    // CORRECCIÓN: Usar _schedule.id para la ID del viaje.
     final msgs = await svc.listMessages(_schedule.id); 
     
     setState(() => _tripMessages = msgs);
     if (_modalSetState != null) _modalSetState!(() {});
     
-    // CORRECCIÓN: Usar _schedule.id en lugar de _s.id
+    // CORRECCIÓN: Usar _schedule.id para la ID del viaje.
     _chatChannel ??= svc.subscribeTripMessages(_schedule.id, (msg) {
       final list = <ChatMessage>[..._tripMessages, msg];
       if (mounted) {
@@ -258,7 +257,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                           final userId = client.auth.currentUser?.id;
                           final text = ctrl.text.trim();
                           if (userId != null && text.isNotEmpty) {
-                            // CORRECCIÓN: Usar _schedule.id en lugar de _s.id
+                            // CORRECCIÓN: Usar _schedule.id para la ID del viaje.
                             final msg = await svc.sendMessage(tripId: _schedule.id, senderId: userId, message: text); 
                             final list = <ChatMessage>[..._tripMessages, msg];
                             if (mounted) {
@@ -303,16 +302,16 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
       } else {
         final available = _schedule.availableSeats;
         if (_selectedSeats.length >= available) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Solo quedan $available asientos disponibles.'),
-                  backgroundColor: _reservedColor,
-                  duration: const Duration(milliseconds: 1500),
-                ),
-              );
-            }
-            return;
+             if (mounted) {
+               ScaffoldMessenger.of(context).showSnackBar(
+                 SnackBar(
+                   content: Text('Solo quedan $available asientos disponibles.'),
+                   backgroundColor: _reservedColor,
+                   duration: const Duration(milliseconds: 1500),
+                 ),
+               );
+             }
+             return;
         }
         
         _selectedSeats.add(seatNumber);
@@ -365,7 +364,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                       children: [
                         Expanded(flex: 3, child: Column(
                           children: [
-                            tripDetailsWidget,
+                            Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: tripDetailsWidget),
                             const SizedBox(height: 20),
                             pickupDisplayWidget,
                             const SizedBox(height: 20),
@@ -387,7 +386,7 @@ class _PassengerTripDetailScreenState extends ConsumerState<PassengerTripDetailS
                           // Detalles del viaje
                           Padding(padding: const EdgeInsets.symmetric(horizontal: 16.0), child: tripDetailsWidget),
                           
-                          // Botón de chat (incorporado de 'main')
+                          // Botón de chat (UNIFICADO)
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 16.0),
                             child: Row(
