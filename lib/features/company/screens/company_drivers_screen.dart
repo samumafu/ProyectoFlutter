@@ -45,9 +45,10 @@ class _CompanyDriversScreenState extends ConsumerState<CompanyDriversScreen> {
             : LayoutBuilder(
                 builder: (context, constraints) {
                   final isGrid = constraints.maxWidth >= 900;
-                  final sidePad = isGrid ? (constraints.maxWidth - 900) / 2 : 0;
+                  // Ensure padding is always a double to avoid cast issues on mobile
+                  final double sidePad = isGrid ? ((constraints.maxWidth - 900) / 2).toDouble() : 0.0;
                   final contentPad = EdgeInsets.symmetric(
-                    horizontal: (sidePad.clamp(0, 80) as double),
+                    horizontal: sidePad.clamp(0.0, 80.0).toDouble(),
                     vertical: 16,
                   );
                   final gridDelegate = const SliverGridDelegateWithFixedCrossAxisCount(

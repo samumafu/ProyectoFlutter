@@ -26,23 +26,46 @@ class ReservationHistory {
   // 🟢 CORRECCIÓN 1: Implementación del factory fromMap
   // Maneja el resultado del JOIN: 'reservations' + 'company_schedules'
   factory ReservationHistory.fromMap(Map<String, dynamic> map) {
-    // Los datos del viaje (origin, destination) vienen anidados bajo 'company_schedules'
-    final scheduleData = map['company_schedules'] as Map<String, dynamic>;
+    // Helpers to normalize numeric values coming from Supabase
+    int _asInt(dynamic v) {
+      if (v == null) return 0;
+      if (v is num) return v.toInt();
+      return int.tryParse(v.toString()) ?? 0;
+    }
+
+    double _asDouble(dynamic v) {
+      if (v == null) return 0.0;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString()) ?? 0.0;
+    }
+
+    double? _asDoubleOrNull(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    // Trip data from the joined table may arrive as Map or null
+    final dynamic sched = map['company_schedules'];
+    final Map<String, dynamic> scheduleData =
+        sched is Map<String, dynamic>
+            ? sched
+            : (sched is Map ? sched.cast<String, dynamic>() : <String, dynamic>{});
 
     return ReservationHistory(
       id: map['id'].toString(),
-      tripId: map['trip_id'] as String,
-      seatsReserved: map['seats_reserved'] as int,
-      totalPrice: map['total_price'] as double,
-      status: map['status'] as String,
-      
-      // Mapeo de campos del JOIN anidado:
-      origin: scheduleData['origin'] as String,
-      destination: scheduleData['destination'] as String,
-      
-      // Campos opcionales (null safety)
-      pickupLatitude: map['pickup_latitude'] as double?,
-      pickupLongitude: map['pickup_longitude'] as double?,
+      tripId: (map['trip_id'] ?? map['schedule_id']).toString(),
+      seatsReserved: _asInt(map['seats_reserved']),
+      totalPrice: _asDouble(map['total_price']),
+      status: (map['status'] ?? '').toString(),
+
+      // Joined fields
+      origin: (scheduleData['origin'] ?? '').toString(),
+      destination: (scheduleData['destination'] ?? '').toString(),
+
+      // Optional pickup coordinates
+      pickupLatitude: _asDoubleOrNull(map['pickup_latitude']),
+      pickupLongitude: _asDoubleOrNull(map['pickup_longitude']),
     );
   }
 
