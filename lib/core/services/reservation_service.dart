@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 import 'package:tu_flota/features/passenger/models/reservation_model.dart';
 import 'package:tu_flota/features/passenger/models/reservation_history_dto.dart'; // NECESARIO
+import 'dart:developer'; // Importar para usar la función log()
 
 // ---------------------------------------------------
 // 1. DEFINICIONES DE TIPO (Typedefs)
@@ -16,17 +17,39 @@ class ReservationService {
   ReservationService(this.client);
 
   // ---------------------------------------------------
-  // 2. Listar reservas por itinerario
+  // 2. Listar reservas por itinerario (CON DEBUG Y MANEJO DE ERRORES)
   // ---------------------------------------------------
   Future<List<Reservation>> listReservationsForSchedule(String scheduleId) async {
-    final data = await client
-        .from('reservations')
-        .select()
-        .eq('trip_id', scheduleId);
+    try {
+      log('DEBUG RESERVATION: Attempting to load reservations for trip ID: $scheduleId');
+      
+      final data = await client
+          .from('reservations')
+          .select()
+          .eq('trip_id', scheduleId);
 
-    return (data as List<dynamic>)
-        .map((e) => Reservation.fromMap(e as Map<String, dynamic>))
-        .toList();
+      if (data == null || (data as List).isEmpty) {
+        log('DEBUG RESERVATION: Query returned no data for ID $scheduleId. (Potential RLS or no reservations)');
+        return const [];
+      }
+      
+      log('DEBUG RESERVATION: Successfully loaded ${(data as List).length} reservations for ID $scheduleId.');
+
+      return (data as List<dynamic>)
+          .map((e) => Reservation.fromMap(e as Map<String, dynamic>))
+          .toList();
+
+    } on PostgrestException catch (e) {
+      // Un error PostgrestException a menudo indica un fallo de RLS o un error en la sintaxis SQL.
+      log('SUPABASE ERROR: PostgrestException loading reservations for $scheduleId: ${e.message}', 
+          error: e.details);
+      return const []; 
+      
+    } catch (e) {
+      // Capturamos cualquier otra excepción (ej. error de conexión)
+      log('GENERAL ERROR: Failed to load reservations for $scheduleId: $e');
+      return const [];
+    }
   }
 
   // ---------------------------------------------------
@@ -35,8 +58,6 @@ class ReservationService {
   Future<Map<String, String>> getPassengerEmailsByIds(List<String> passengerIds) async {
     if (passengerIds.isEmpty) return {};
 
-    // RESOLUCIÓN DE CONFLICTO (FEATURED-DESIGN WINS):
-    // Se usan comillas simples ('$e') para que el filtro 'in' funcione correctamente con UUIDs/strings en Supabase.
     final idsList = passengerIds.map((e) => "'$e'").join(',');
 
     final pasajeros = await client
@@ -58,8 +79,6 @@ class ReservationService {
 
     if (userIds.isEmpty) return {};
     
-    // RESOLUCIÓN DE CONFLICTO (FEATURED-DESIGN WINS):
-    // Se usan comillas simples para los userIds también por la misma razón.
     final uIdsList = userIds.map((e) => "'$e'").join(',');
 
     final users = await client
@@ -138,24 +157,29 @@ class ReservationService {
   // 5. Historial por pasajero (ordenado por created_at)
   // ---------------------------------------------------
   Future<List<ReservationHistory>> listReservationsByPassenger(String passengerId) async {
-    final data = await client
-        .from('reservations')
-        .select('''
-          *,
-          company_schedules(
-            origin,
-            destination,
-            departure_time,
-            arrival_time,
-            companies(name)
-          )
-        ''')
-        .eq('passenger_id', passengerId)
-        .order('created_at', ascending: false);
+    try {
+      final data = await client
+          .from('reservations')
+          .select('''
+            *,
+            company_schedules(
+              origin,
+              destination,
+              departure_time,
+              arrival_time,
+              companies(name)
+            )
+          ''')
+          .eq('passenger_id', passengerId)
+          .order('created_at', ascending: false);
 
-    return (data as List<dynamic>)
-        .map((e) => ReservationHistory.fromMap(e))
-        .toList();
+      return (data as List<dynamic>)
+          .map((e) => ReservationHistory.fromMap(e))
+          .toList();
+    } catch (e) {
+      log('ERROR loading passenger history for $passengerId: $e');
+      return const [];
+    }
   }
 
   // ---------------------------------------------------

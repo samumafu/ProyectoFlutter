@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:tu_flota/core/constants/app_strings.dart';
 import 'package:tu_flota/core/services/supabase_service.dart';
 import 'package:tu_flota/features/company/controllers/company_controller.dart';
@@ -11,6 +12,9 @@ import 'package:tu_flota/features/company/screens/company_add_driver_screen.dart
 import 'package:tu_flota/features/company/screens/company_schedules_screen.dart';
 import 'package:tu_flota/features/company/screens/company_create_trip_screen.dart';
 import 'package:tu_flota/features/company/screens/company_edit_trip_screen.dart';
+// ⚠️ Importa la pantalla de Reservas (asumiendo que ya la creaste en un archivo separado)
+import 'package:tu_flota/features/company/screens/company_reservations_screen.dart'; 
+
 import 'package:tu_flota/features/passenger/screens/passenger_search_trips_screen.dart';
 import 'package:tu_flota/features/passenger/screens/passenger_profile_screen.dart';
 import 'package:tu_flota/features/passenger/screens/passenger_edit_profile_screen.dart';
@@ -19,7 +23,6 @@ import 'package:tu_flota/features/passenger/screens/passenger_trip_detail_screen
 import 'package:tu_flota/features/driver/screens/driver_dashboard_screen.dart';
 import 'package:tu_flota/features/passenger/screens/chat_assistant_screen.dart'; 
 import 'package:tu_flota/features/passenger/screens/route_map_screen.dart'; 
-import 'package:latlong2/latlong.dart'; 
 
 // Unified router below
 
@@ -57,6 +60,8 @@ class _App extends ConsumerWidget {
           final args = ModalRoute.of(context)!.settings.arguments;
           return CompanyEditTripScreen(schedule: args);
         },
+        // 🔑 RUTA AÑADIDA: Para la pantalla dedicada a la lista de Reservas
+        '/company/reservations': (context) => const CompanyReservationsScreen(),
         
         // Passenger routes
         '/passenger/dashboard': (context) => const PassengerSearchTripsScreen(),
@@ -64,7 +69,6 @@ class _App extends ConsumerWidget {
         '/passenger/profile/edit': (context) => const PassengerEditProfileScreen(),
         '/passenger/history': (context) => const PassengerHistoryScreen(),
         
-        // CORRECCIÓN CLAVE: Asegura la llamada al constructor del Widget.
         '/passenger/trip/detail': (context) {
           final args = ModalRoute.of(context)!.settings.arguments;
           return PassengerTripDetailScreen(schedule: args);

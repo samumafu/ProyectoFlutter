@@ -11,23 +11,19 @@ import 'package:tu_flota/core/services/chat_service.dart';
 import 'package:tu_flota/core/services/supabase_service.dart';
 import 'package:tu_flota/features/passenger/models/reservation_model.dart';
 import 'package:tu_flota/features/company/models/chat_message_model.dart';
-
-// 1. Importación del modelo Driver (que movimos a su propia carpeta)
 import 'package:tu_flota/features/driver/models/driver_model.dart'; 
-// 2. Importación de Company (que está en su ruta original)
 import 'package:tu_flota/features/company/models/company_model.dart'; 
-// 3. Importaciones de modelos que tu controlador usa pero que no estaban listada
-
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
+import 'dart:developer'; // Importar para usar la función log()
 
 
 class CompanyState {
   final UserModel? user;
   final Company? company;
-  final List<Driver> drivers; // Ahora encuentra Driver
+  final List<Driver> drivers; 
   final List<CompanySchedule> schedules;
-  final Map<String, List<Reservation>> reservationsBySchedule; // Ahora encuentra Reservation
-  final Map<String, List<ChatMessage>> messagesByTrip; // Ahora encuentra ChatMessage
+  final Map<String, List<Reservation>> reservationsBySchedule; 
+  final Map<String, List<ChatMessage>> messagesByTrip; 
   final bool isLoading;
   final String? error;
 
@@ -45,7 +41,7 @@ class CompanyState {
   CompanyState copyWith({
     UserModel? user,
     Company? company,
-    List<Driver>? drivers, // Ahora encuentra Driver
+    List<Driver>? drivers, 
     List<CompanySchedule>? schedules,
     Map<String, List<Reservation>>? reservationsBySchedule,
     Map<String, List<ChatMessage>>? messagesByTrip,
@@ -84,11 +80,14 @@ class CompanyController extends StateNotifier<CompanyState> {
     _chatService = ChatService(_client);
   }
 
+  // --- LÓGICA DE AUTENTICACIÓN Y PERFIL DE COMPAÑÍA ---
+
   Future<void> loadAuthAndCompany() async {
     try {
       state = state.copyWith(isLoading: true, error: null);
       final authUser = _client.auth.currentUser;
       if (authUser == null) {
+        log('AUTH DEBUG: No authenticated user found.');
         state = CompanyState(
           user: null,
           company: null,
@@ -107,6 +106,7 @@ class CompanyController extends StateNotifier<CompanyState> {
           .eq('id', authUser.id)
           .maybeSingle();
       if (userRow == null) {
+        log('AUTH DEBUG: User row not found for UID: ${authUser.id}');
         state = CompanyState(
           user: null,
           company: null,
@@ -131,6 +131,7 @@ class CompanyController extends StateNotifier<CompanyState> {
       }
       // Preserve previously selected company if no association was found
       company ??= state.company;
+      log('AUTH DEBUG: Company loaded: ${company?.name ?? 'N/A'} (ID: ${company?.id ?? 'N/A'})');
       state = CompanyState(
         user: user,
         company: company,
@@ -142,6 +143,7 @@ class CompanyController extends StateNotifier<CompanyState> {
         error: null,
       );
     } catch (e) {
+      log('ERROR: loadAuthAndCompany failed: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
@@ -176,6 +178,12 @@ class CompanyController extends StateNotifier<CompanyState> {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
+
+  void setCompany(Company company) {
+    state = state.copyWith(company: company);
+  }
+
+  // --- LÓGICA DE CONDUCTORES (DRIVERS) ---
 
   Future<void> loadDrivers() async {
     try {
@@ -257,20 +265,71 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
+  // --- LÓGICA DE HORARIOS (SCHEDULES) Y RESERVAS ---
+
   Future<void> loadSchedules() async {
     try {
       final companyId = state.company?.id;
-      if (companyId == null) return;
+      if (companyId == null) {
+        log('DEBUG SCHEDULES: Cannot load schedules. Company ID is null.');
+        return;
+      }
       state = state.copyWith(isLoading: true);
+      
+      // 1. Cargar Horarios
       final schedules = await _tripService.listSchedulesByCompany(companyId);
+      
+      // ** LOG DE HORARIOS **
+      log('DEBUG SCHEDULES: Loaded ${schedules.length} schedules from service.');
+      
+      // 2. Actualizar estado con horarios
       state = state.copyWith(schedules: schedules, isLoading: false);
+
+      // 3. PASO CLAVE: Cargar todas las reservas
+      await _loadAllReservations();
+      
       _subscribeSchedulesRealtime();
     } catch (e) {
+      log('ERROR: loadSchedules failed: $e');
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
+  // MÉTODO AGREGADO: Carga todas las reservas de la compañía de forma masiva
+  Future<void> _loadAllReservations() async {
+    final scheduleIds = state.schedules.map((s) => s.id).toList();
+    
+    // ** LOG DE RESERVAS **
+    log('DEBUG RESERVATIONS: Starting load for ${scheduleIds.length} trip IDs.');
+    
+    if (scheduleIds.isEmpty) {
+        state = state.copyWith(reservationsBySchedule: {});
+        log('DEBUG RESERVATIONS: No schedule IDs, exiting load.');
+        return;
+    }
+
+    // Cargar todas las reservas en paralelo
+    final results = await Future.wait(
+      scheduleIds.map((id) => _reservationService.listReservationsForSchedule(id))
+    );
+
+    // Reconstruir el mapa de reservas
+    final updatedMap = <String, List<Reservation>>{};
+    int totalReservations = 0;
+    for (int i = 0; i < scheduleIds.length; i++) {
+        updatedMap[scheduleIds[i]] = results[i];
+        totalReservations += results[i].length;
+    }
+
+    // ** LOG FINAL DE RESERVAS **
+    log('DEBUG RESERVATIONS: Finished loading. Total reservations found: $totalReservations');
+
+    // Actualizar estado con todas las reservas
+    state = state.copyWith(reservationsBySchedule: updatedMap);
+  }
+
   Future<void> createSchedule(CompanySchedule schedule) async {
+    // ... (código sin cambios)
     try {
       // Ensure schedule has the current company id
       final cid = state.company?.id;
@@ -298,12 +357,8 @@ class CompanyController extends StateNotifier<CompanyState> {
     }
   }
 
-  // Allow manual company selection when association is missing
-  void setCompany(Company company) {
-    state = state.copyWith(company: company);
-  }
-
   Future<void> updateSchedule(CompanySchedule schedule) async {
+    // ... (código sin cambios)
     try {
       final updatedSchedule = await _tripService.updateSchedule(schedule);
       state = state.copyWith(
@@ -317,17 +372,22 @@ class CompanyController extends StateNotifier<CompanyState> {
   }
 
   Future<void> deleteSchedule(String id) async {
+    // ... (código sin cambios)
     try {
       await _tripService.deleteSchedule(id);
       state = state.copyWith(
         schedules: state.schedules.where((s) => s.id != id).toList(),
+        // Opcional: Limpiar las reservas asociadas al horario eliminado
+        reservationsBySchedule: Map.from(state.reservationsBySchedule)..remove(id),
       );
     } catch (e) {
       state = state.copyWith(error: e.toString());
     }
   }
 
+  // Este método solo carga las reservas para un *único* horario,
   Future<void> loadReservationsForSchedule(String scheduleId) async {
+    // ... (código sin cambios)
     try {
       final reservations =
           await _reservationService.listReservationsForSchedule(scheduleId);
@@ -339,6 +399,9 @@ class CompanyController extends StateNotifier<CompanyState> {
       state = state.copyWith(error: e.toString());
     }
   }
+
+  // --- LÓGICA DE CHAT ---
+  // ... (métodos de chat sin cambios)
 
   Future<void> loadMessagesForTrip(String tripId) async {
     try {
@@ -385,7 +448,10 @@ class CompanyController extends StateNotifier<CompanyState> {
     channel?.unsubscribe();
   }
 
-  // Internal realtime subscriptions
+
+  // --- SUSCRIPCIONES EN TIEMPO REAL (REALTIME) ---
+  // ... (métodos de suscripción sin cambios)
+
   void _subscribeDriversRealtime() {
     _driversChannel?.unsubscribe();
     _driversChannel = _companyService.subscribeDrivers(
@@ -433,12 +499,17 @@ class CompanyController extends StateNotifier<CompanyState> {
       },
       onDelete: (id) {
         final updated = state.schedules.where((e) => e.id != id).toList();
-        state = state.copyWith(schedules: updated);
+          // Opcional: Limpiar las reservas asociadas al horario eliminado
+        state = state.copyWith(
+          schedules: updated,
+          reservationsBySchedule: Map.from(state.reservationsBySchedule)..remove(id),
+        );
       },
     );
   }
 
-  // Helpers
+  // --- AYUDAS Y CONTADORES ---
+
   String formatIso(DateTime date, TimeOfDay time) {
     final dt = DateTime(
       date.year,
@@ -493,6 +564,8 @@ class CompanyController extends StateNotifier<CompanyState> {
       'reservations': (reservationsRes as List).length,
     };
   }
+
+  // --- DISPOSE Y RESET ---
 
   @override
   void dispose() {
