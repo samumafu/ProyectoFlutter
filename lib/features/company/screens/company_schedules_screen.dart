@@ -45,19 +45,15 @@ class _CompanySchedulesScreenState extends ConsumerState<CompanySchedulesScreen>
     await notifier.loadAuthAndCompany();
     final state = ref.read(companyControllerProvider);
 
-    // If still no company, prompt once for selection
     if (state.company == null && mounted) {
       final supabase = ref.read(supabaseProvider);
       final response = await supabase.from('companies').select();
 
       if (mounted && response is List) {
         final companies = response.whereType<Map<String, dynamic>>().toList();
-        if (companies.length == 1) {
+        if (companies.isNotEmpty) {
           final company = Company.fromMap(companies.first);
           notifier.setCompany(company);
-        } else if (companies.length > 1) {
-          _showCompanySelectionDialog(companies);
-          return; // loadSchedules is called after selection
         }
       }
     }
