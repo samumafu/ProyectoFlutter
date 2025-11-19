@@ -7,6 +7,7 @@ import 'package:tu_flota/features/company/controllers/company_controller.dart';
 import 'package:tu_flota/features/company/models/company_schedule_model.dart';
 import 'package:tu_flota/core/data/narino_municipalities.dart'; 
 import 'dart:convert';
+import 'package:intl/intl.dart'; // 
 
 // Lista de tipos de vehículo para el Dropdown
 const List<String> _vehicleTypes = ['Bus', 'Van', 'SUV', 'Minibus', 'Truck'];
@@ -72,6 +73,9 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
     final companyId = ref.read(companyControllerProvider).company?.id;
     if (companyId == null) return;
     
+    // Limpiamos el texto del precio de separadores de miles antes de intentar parsear
+    final priceTextClean = _price.text.trim().replaceAll('.', ''); 
+
     final schedule = CompanySchedule(
       id: '',
       companyId: companyId,
@@ -79,7 +83,7 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
       destination: _selectedDestination!,
       departureTime: _departure.text.trim(),
       arrivalTime: _arrival.text.trim(),
-      price: double.tryParse(_price.text.trim()) ?? 0,
+      price: double.tryParse(priceTextClean) ?? 0, // <--- USO DEL TEXTO LIMPIO
       availableSeats: int.tryParse(_availableSeats.text.trim()) ?? 0,
       totalSeats: int.tryParse(_totalSeats.text.trim()) ?? 0,
       vehicleType: _selectedVehicleType, 
@@ -209,7 +213,7 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
     if (isDeparture && _departureDateTime == null) {
       // Si la salida no se actualizó (porque la hora era pasada), borramos el campo de texto y salimos.
       setState(() => _departure.clear());
-      _formKey.currentState!.validate();
+      // CAMBIO 1: Eliminada la llamada intrusiva a _formKey.currentState!.validate();
       return;
     }
 
@@ -233,32 +237,94 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
       } else {
         _arrival.text = iso;
       }
-      _formKey.currentState!.validate(); // Trigger validation for immediate feedback
+      // CAMBIO 1: Eliminada la llamada intrusiva a _formKey.currentState!.validate();
     });
   }
 
-  Widget _buildMunicipalityDropdown({
+  // --- NUEVA FUNCIÓN: Autocompletado para Municipios ---
+  Widget _buildMunicipalityAutocomplete({
     required String label,
-    String? value,
-    required void Function(String?) onChanged,
+    String? initialValue,
+    required void Function(String?) onSelected,
   }) {
-    return DropdownButtonFormField<String>(
-      decoration: deco(label).copyWith(
-        prefixIcon: const Icon(Icons.location_city_outlined, color: _primaryColor),
-      ),
-      value: value,
-      items: narinoMunicipalities.map((municipio) {
-        return DropdownMenuItem(
-          value: municipio,
-          child: Text(municipio),
+    final List<String> municipalities = narinoMunicipalities; 
+    
+    Iterable<String> _suggestions(TextEditingValue textEditingValue) {
+      if (textEditingValue.text.isEmpty) {
+        // Muestra los primeros 10 municipios si el campo está vacío
+        return municipalities.take(10); 
+      }
+      return municipalities.where((municipio) {
+        return municipio
+            .toLowerCase()
+            .contains(textEditingValue.text.toLowerCase());
+      }).take(20); // Limita las sugerencias a 20
+    }
+
+    return Autocomplete<String>(
+      initialValue: TextEditingValue(text: initialValue ?? ''),
+      optionsBuilder: _suggestions,
+      onSelected: (String selection) {
+        onSelected(selection); 
+      },
+      fieldViewBuilder: (
+        BuildContext context,
+        TextEditingController fieldTextEditingController,
+        FocusNode fieldFocusNode,
+        VoidCallback onFieldSubmitted,
+      ) {
+        return TextFormField(
+          controller: fieldTextEditingController,
+          focusNode: fieldFocusNode,
+          decoration: deco(label).copyWith(
+            prefixIcon: const Icon(Icons.location_city_outlined, color: _primaryColor),
+          ),
+          validator: (v) {
+            final validationResult = _req(v);
+            if (validationResult != null) return validationResult;
+
+            // Validación adicional: Asegura que el valor ingresado exista en la lista
+            if (!municipalities.contains(v)) {
+              return 'Please select a valid municipality from the list.';
+            }
+            // Guarda el valor en la variable de estado cuando se valida
+            WidgetsBinding.instance.addPostFrameCallback((_) => onSelected(v));
+            return null;
+          },
+          onFieldSubmitted: (String value) {
+            onSelected(value); 
+            onFieldSubmitted();
+          },
         );
-      }).toList(),
-      onChanged: onChanged,
-      validator: _req,
-      isExpanded: true,
-      menuMaxHeight: 300,
+      },
+      optionsViewBuilder: (context, onSelectedOption, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4.0,
+            child: SizedBox(
+              height: 200.0,
+              width: 300, 
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                itemCount: options.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final String option = options.elementAt(index);
+                  return ListTile(
+                    title: Text(option),
+                    onTap: () {
+                      onSelectedOption(option);
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
+
 
   Widget _buildVehicleTypeDropdown({
     required String label,
@@ -345,39 +411,39 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
                         children: [
                           const Text('Trip Route', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87)),
                           const Divider(height: 20, thickness: 1),
-                          // --- ORIGIN / DESTINATION DROPDOWNS ---
+                          // --- ORIGIN / DESTINATION AUTOCOMPLETE ---
                           isWide
                               ? Row(
                                   children: [
                                     Expanded(
-                                      child: _buildMunicipalityDropdown(
+                                      child: _buildMunicipalityAutocomplete(
                                         label: AppStrings.origin,
-                                        value: _selectedOrigin,
-                                        onChanged: (v) => setState(() => _selectedOrigin = v),
+                                        initialValue: _selectedOrigin,
+                                        onSelected: (v) => setState(() => _selectedOrigin = v),
                                       ),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
-                                      child: _buildMunicipalityDropdown(
+                                      child: _buildMunicipalityAutocomplete(
                                         label: AppStrings.destination,
-                                        value: _selectedDestination,
-                                        onChanged: (v) => setState(() => _selectedDestination = v),
+                                        initialValue: _selectedDestination,
+                                        onSelected: (v) => setState(() => _selectedDestination = v),
                                       ),
                                     ),
                                   ],
                                 )
                               : Column(
                                   children: [
-                                    _buildMunicipalityDropdown(
+                                    _buildMunicipalityAutocomplete(
                                       label: AppStrings.origin,
-                                      value: _selectedOrigin,
-                                      onChanged: (v) => setState(() => _selectedOrigin = v),
+                                      initialValue: _selectedOrigin,
+                                      onSelected: (v) => setState(() => _selectedOrigin = v),
                                     ),
                                     const SizedBox(height: 12),
-                                    _buildMunicipalityDropdown(
+                                    _buildMunicipalityAutocomplete(
                                       label: AppStrings.destination,
-                                      value: _selectedDestination,
-                                      onChanged: (v) => setState(() => _selectedDestination = v),
+                                      initialValue: _selectedDestination,
+                                      onSelected: (v) => setState(() => _selectedDestination = v),
                                     ),
                                   ],
                                 ),
@@ -504,7 +570,38 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
                           isWide
                               ? Row(
                                   children: [
-                                    Expanded(child: TextFormField(controller: _price, decoration: deco(AppStrings.price).copyWith(prefixIcon: const Icon(Icons.money, color: _primaryColor)), keyboardType: TextInputType.number, validator: _req)),
+                                    // CAMBIO 2: Formato de Moneda COP
+                                    Expanded(
+                                      child: TextFormField(
+                                        controller: _price, 
+                                        decoration: deco(AppStrings.price).copyWith(prefixIcon: const Icon(Icons.money, color: _primaryColor)), 
+                                        keyboardType: TextInputType.number, 
+                                        validator: _req,
+                                        onChanged: (value) {
+                                          if (value.isNotEmpty) {
+                                            final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                                            if (cleanValue.isEmpty) return;
+                                            
+                                            final number = int.tryParse(cleanValue);
+
+                                            if (number != null) {
+                                              final formatter = NumberFormat.currency(
+                                                locale: 'es_CO', 
+                                                symbol: '', 
+                                                decimalDigits: 0, 
+                                              );
+                                              
+                                              final formatted = formatter.format(number).trim();
+
+                                              _price.value = TextEditingValue(
+                                                text: formatted,
+                                                selection: TextSelection.collapsed(offset: formatted.length),
+                                              );
+                                            }
+                                          }
+                                        },
+                                      )
+                                    ),
                                     const SizedBox(width: 16),
                                     Expanded(child: TextFormField(controller: _availableSeats, decoration: deco(AppStrings.availableSeats).copyWith(prefixIcon: const Icon(Icons.event_seat_outlined, color: _primaryColor)), keyboardType: TextInputType.number, validator: _req)),
                                     const SizedBox(width: 16),
@@ -513,7 +610,36 @@ class _CompanyCreateTripScreenState extends ConsumerState<CompanyCreateTripScree
                                 )
                               : Column(
                                   children: [
-                                    TextFormField(controller: _price, decoration: deco(AppStrings.price).copyWith(prefixIcon: const Icon(Icons.money, color: _primaryColor)), keyboardType: TextInputType.number, validator: _req),
+                                    // CAMBIO 2: Formato de Moneda COP
+                                    TextFormField(
+                                        controller: _price, 
+                                        decoration: deco(AppStrings.price).copyWith(prefixIcon: const Icon(Icons.money, color: _primaryColor)), 
+                                        keyboardType: TextInputType.number, 
+                                        validator: _req,
+                                        onChanged: (value) {
+                                          if (value.isNotEmpty) {
+                                            final cleanValue = value.replaceAll(RegExp(r'[^\d]'), '');
+                                            if (cleanValue.isEmpty) return;
+                                            
+                                            final number = int.tryParse(cleanValue);
+
+                                            if (number != null) {
+                                              final formatter = NumberFormat.currency(
+                                                locale: 'es_CO', 
+                                                symbol: '', 
+                                                decimalDigits: 0, 
+                                              );
+                                              
+                                              final formatted = formatter.format(number).trim();
+
+                                              _price.value = TextEditingValue(
+                                                text: formatted,
+                                                selection: TextSelection.collapsed(offset: formatted.length),
+                                              );
+                                            }
+                                          }
+                                        },
+                                      ),
                                     const SizedBox(height: 12),
                                     TextFormField(controller: _availableSeats, decoration: deco(AppStrings.availableSeats).copyWith(prefixIcon: const Icon(Icons.event_seat_outlined, color: _primaryColor)), keyboardType: TextInputType.number, validator: _req),
                                     const SizedBox(height: 12),
